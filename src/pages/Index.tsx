@@ -30,7 +30,7 @@ const Index = () => {
       
       // Process with LLM
       setProcessingStage('Analyzing with AI...');
-      const processedPaper = await processPaperWithLLM(extractedPaperData) as ProcessedPaper;
+      const processedPaper = await processPaperWithLLM(extractedPaperData);
       setProcessedData(processedPaper);
       
       setIsProcessing(false);
@@ -53,9 +53,9 @@ const Index = () => {
         <div className="container">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold">Paper to Practice Path</h1>
+              <h1 className="text-3xl font-bold">DeepRead</h1>
               <p className="text-paper-light mt-1">
-                Transform arXiv papers into practical implementations
+                Transform academic papers into practical implementations
               </p>
             </div>
           </div>
@@ -124,7 +124,7 @@ const Index = () => {
         <div className="container">
           <div className="text-center">
             <p className="text-gray-600">
-              Paper to Practice Path | Building bridges between academic research and practical implementation
+              DeepRead | Building bridges between academic research and practical implementation
             </p>
           </div>
         </div>

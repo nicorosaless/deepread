@@ -1,73 +1,71 @@
-# Welcome to your Lovable project
 
-## Project info
+# DeepRead
 
-**URL**: https://lovable.dev/projects/4a5d9715-4df0-4691-9823-eac8458420d5
+DeepRead is an application that transforms academic papers into practical implementations using AI.
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- Upload academic papers (PDF format)
+- Extract content from papers
+- Generate summaries and key points
+- Suggest practical implementation projects with code examples
 
-**Use Lovable**
+## Project Structure
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/4a5d9715-4df0-4691-9823-eac8458420d5) and start prompting.
+- `/src`: React frontend
+- `/backend`: Python FastAPI backend
 
-Changes made via Lovable will be committed automatically to this repo.
+## Setup Instructions
 
-**Use your preferred IDE**
+### Backend Setup
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+1. Navigate to the backend directory:
+   ```
+   cd backend
+   ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+2. Create a virtual environment:
+   ```
+   python -m venv venv
+   ```
 
-Follow these steps:
+3. Activate the virtual environment:
+   - Windows: `venv\Scripts\activate`
+   - macOS/Linux: `source venv/bin/activate`
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+4. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+5. Run the FastAPI server:
+   ```
+   uvicorn main:app --reload
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Frontend Setup
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+1. Install frontend dependencies:
+   ```
+   npm install
+   ```
 
-**Edit a file directly in GitHub**
+2. Run the development server:
+   ```
+   npm run dev
+   ```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Technologies Used
 
-**Use GitHub Codespaces**
+- **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend**: Python, FastAPI
+- **AI Models**: Together AI (Llama-3.3-70B and DeepSeek-R1-Distill-Llama-70B)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## How It Works
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/4a5d9715-4df0-4691-9823-eac8458420d5) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+1. Upload a PDF of an academic paper
+2. The backend extracts text content from the PDF
+3. The content is sent to Together AI's LLMs:
+   - Llama-3.3-70B for generating summaries and key points
+   - DeepSeek-R1-Distill-Llama-70B for generating code implementations
+4. Results are displayed in an easy-to-understand format
