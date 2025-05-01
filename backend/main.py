@@ -1,13 +1,17 @@
-
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from pydantic import BaseModel
 from typing import List, Optional
-import together
 import os
 from io import BytesIO
 import PyPDF2
+
+from together import Together
+import os
+
+import together
+
 
 app = FastAPI()
 
@@ -22,7 +26,7 @@ app.add_middleware(
 
 # Configure Together AI API key
 TOGETHER_API_KEY = "b31965744154f5ba00c848c3817641bfba87872ac700f27fb130306fbd764e21"
-together.api_key = TOGETHER_API_KEY
+os.environ["TOGETHER_API_KEY"] = TOGETHER_API_KEY
 
 # Models
 SUMMARY_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
@@ -82,41 +86,51 @@ async def extract_pdf(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
 
+# Initialize Together client
+
+client = Together(api_key=TOGETHER_API_KEY)
+
 @app.post("/api/process-paper", response_model=ProcessedPaper)
 async def process_paper(paper_data: PaperData):
     try:
         # Generate summary and key points using Llama model
-        summary_response = together.chat.completions.create(
+        summary_response = client.chat.completions.create(
             model=SUMMARY_MODEL,
             messages=[
                 {"role": "system", "content": "You are an AI assistant specialized in summarizing academic papers. Provide a concise summary and extract key points from the paper."},
                 {"role": "user", "content": f"Title: {paper_data.title}\n\nContent: {paper_data.content}\n\nPlease provide a concise summary of this paper and list 5 key points from it."}
-            ]
+            ],
+            stream=True,  # Enable streaming
+            temperature=0.6  # Set temperature for balanced responses
         )
-        summary_text = summary_response.choices[0].message.content
-        
+        summary_text = ""
+        for chunk in summary_response:
+            summary_text += chunk.choices[0].delta.content or ""
+
         # Extract summary and key points from the response
-        # Simple parsing for this example
         parts = summary_text.split("Key points:")
         summary = parts[0].strip() if len(parts) > 0 else "Summary not available"
-        
+
         key_points_text = parts[1].strip() if len(parts) > 1 else ""
         key_points = [point.strip().replace("- ", "") for point in key_points_text.split("\n") if point.strip()]
         if not key_points:
             key_points = ["Key point 1", "Key point 2", "Key point 3"]  # Fallback
-            
+
         # Generate project suggestions with code using DeepSeek model
-        code_response = together.chat.completions.create(
+        code_response = client.chat.completions.create(
             model=CODE_MODEL,
             messages=[
                 {"role": "system", "content": "You are an AI assistant specialized in generating practical implementation projects based on academic papers. For each project, provide a title, description, difficulty level (Beginner/Intermediate/Advanced), and code implementation."},
                 {"role": "user", "content": f"Based on this paper: {paper_data.title}\n\nContent: {paper_data.content}\n\nProvide 2 project ideas with implementation code. Format your response as JSON with a structure like this: {{'projects': [{{'title': 'Project Title', 'description': 'Project description', 'difficulty': 'Beginner/Intermediate/Advanced', 'code': 'code here', 'language': 'programming language'}}]}}"}
-            ]
+            ],
+            stream=True,  # Enable streaming
+            temperature=0.6  # Set temperature for balanced responses
         )
-        project_text = code_response.choices[0].message.content
-        
-        # In a real implementation, we would parse the JSON properly
-        # For this example, we'll use simplified project suggestions
+        project_text = ""
+        for chunk in code_response:
+            project_text += chunk.choices[0].delta.content or ""
+
+        # Simplified project suggestions
         project_suggestions = [
             ProjectSuggestion(
                 title="Basic Implementation",
@@ -133,13 +147,13 @@ async def process_paper(paper_data: PaperData):
                 language="python"
             )
         ]
-        
+
         return ProcessedPaper(
             summary=summary,
             keyPoints=key_points,
             projectSuggestions=project_suggestions
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing paper with LLM: {str(e)}")
 
@@ -147,5 +161,4 @@ async def process_paper(paper_data: PaperData):
 async def root():
     return {"message": "DeepRead API is running"}
 
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
