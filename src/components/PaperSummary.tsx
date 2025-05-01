@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Book } from 'lucide-react';
@@ -6,7 +5,6 @@ import { Book } from 'lucide-react';
 interface PaperSummaryProps {
   title: string;
   summary: string;
-  keyPoints: string[];
   authors?: string[];
   date?: string;
 }
@@ -14,7 +12,6 @@ interface PaperSummaryProps {
 const PaperSummary: React.FC<PaperSummaryProps> = ({
   title,
   summary,
-  keyPoints,
   authors,
   date
 }) => {
@@ -38,16 +35,7 @@ const PaperSummary: React.FC<PaperSummaryProps> = ({
         
         <div className="my-4">
           <h4 className="font-medium text-gray-800 mb-2">Summary</h4>
-          <p className="text-gray-700">{summary}</p>
-        </div>
-        
-        <div className="mt-6">
-          <h4 className="font-medium text-gray-800 mb-2">Key Points</h4>
-          <ul className="list-disc pl-5 space-y-1">
-            {keyPoints.map((point, index) => (
-              <li key={index} className="text-gray-700">{point}</li>
-            ))}
-          </ul>
+          <p className="text-gray-700 whitespace-pre-line">{summary}</p>
         </div>
       </CardContent>
     </Card>

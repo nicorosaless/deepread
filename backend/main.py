@@ -6,11 +6,9 @@ from typing import List, Optional
 import os
 from io import BytesIO
 import PyPDF2
+import re
 
-from together import Together
-import os
-
-import together
+from groq import Groq
 
 
 app = FastAPI()
@@ -25,8 +23,6 @@ app.add_middleware(
 )
 
 # Configure Together AI API key
-TOGETHER_API_KEY = "b31965744154f5ba00c848c3817641bfba87872ac700f27fb130306fbd764e21"
-os.environ["TOGETHER_API_KEY"] = TOGETHER_API_KEY
 
 # Models
 SUMMARY_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
@@ -86,71 +82,77 @@ async def extract_pdf(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
 
-# Initialize Together client
-
-client = Together(api_key=TOGETHER_API_KEY)
+# Initialize Groq client
+client = Groq(
+    api_key=os.environ.get("GROQ_API_KEY"),
+)
 
 @app.post("/api/process-paper", response_model=ProcessedPaper)
 async def process_paper(paper_data: PaperData):
     try:
-        # Generate summary and key points using Llama model
+        # Remove <think> tokens from the summary
+
+        # Adjust max_tokens for summary and code generation
+        max_summary_tokens = 2048  # Adjusted for concise summaries
+        max_code_tokens = 8192  # Adjusted for detailed code implementations
+
+        # Generate summary using Groq model
         summary_response = client.chat.completions.create(
-            model=SUMMARY_MODEL,
+            model="deepseek-r1-distill-llama-70b",
             messages=[
-                {"role": "system", "content": "You are an AI assistant specialized in summarizing academic papers. Provide a concise summary and extract key points from the paper."},
-                {"role": "user", "content": f"Title: {paper_data.title}\n\nContent: {paper_data.content}\n\nPlease provide a concise summary of this paper and list 5 key points from it."}
+                {"role": "system", "content": "You are an AI assistant specialized in summarizing academic papers. Provide a concise and well-structured summary of the paper."},
+                {"role": "user", "content": f"Title: {paper_data.title}\n\nContent: {paper_data.content}\n\nPlease provide a concise and well-structured summary of this paper."}
             ],
-            stream=True,  # Enable streaming
-            temperature=0.6  # Set temperature for balanced responses
+            temperature=0.2,
+            max_tokens=max_summary_tokens,
+            top_p=0.2,  # Reduced for more focused output
+            stream=True
         )
         summary_text = ""
         for chunk in summary_response:
             summary_text += chunk.choices[0].delta.content or ""
 
-        # Extract summary and key points from the response
-        parts = summary_text.split("Key points:")
-        summary = parts[0].strip() if len(parts) > 0 else "Summary not available"
+        # Remove asterisks from key points in the summary
+        summary_text = re.sub(r"\*\*(.*?)\*\*", r"\1", summary_text)
+        summary_text = re.sub(r"<think>.*?</think>", "", summary_text, flags=re.DOTALL)
 
-        key_points_text = parts[1].strip() if len(parts) > 1 else ""
-        key_points = [point.strip().replace("- ", "") for point in key_points_text.split("\n") if point.strip()]
-        if not key_points:
-            key_points = ["Key point 1", "Key point 2", "Key point 3"]  # Fallback
+        # Generate code implementation based on paper content
+        project_suggestions = []
 
-        # Generate project suggestions with code using DeepSeek model
+        # Generate code implementation using LLM
         code_response = client.chat.completions.create(
-            model=CODE_MODEL,
+            model="deepseek-r1-distill-llama-70b",
             messages=[
-                {"role": "system", "content": "You are an AI assistant specialized in generating practical implementation projects based on academic papers. For each project, provide a title, description, difficulty level (Beginner/Intermediate/Advanced), and code implementation."},
-                {"role": "user", "content": f"Based on this paper: {paper_data.title}\n\nContent: {paper_data.content}\n\nProvide 2 project ideas with implementation code. Format your response as JSON with a structure like this: {{'projects': [{{'title': 'Project Title', 'description': 'Project description', 'difficulty': 'Beginner/Intermediate/Advanced', 'code': 'code here', 'language': 'programming language'}}]}}"}
+                {"role": "system", "content": "You are an AI assistant specialized in generating advanced code implementations based on academic papers."},
+                {"role": "user", "content": f"Title: {paper_data.title}\n\nContent: {paper_data.content}\n\nPlease generate an advanced code implementation based on the concepts and methods described in this paper."}
             ],
-            stream=True,  # Enable streaming
-            temperature=0.6  # Set temperature for balanced responses
+            temperature=0.6,
+            max_tokens=max_code_tokens,
+            top_p=0.1,
+            stream=True
         )
-        project_text = ""
-        for chunk in code_response:
-            project_text += chunk.choices[0].delta.content or ""
 
-        # Simplified project suggestions
-        project_suggestions = [
+        code_implementation = ""
+        for chunk in code_response:
+            code_implementation += chunk.choices[0].delta.content or ""
+
+        # Remove <think> tokens from the code implementation
+        code_implementation = re.sub(r"<think>.*?</think>", "", code_implementation, flags=re.DOTALL)
+
+        # Add the generated code as a project suggestion
+        project_suggestions.append(
             ProjectSuggestion(
-                title="Basic Implementation",
-                description=f"A beginner-friendly implementation of the main concept in {paper_data.title}",
-                difficulty="Beginner",
-                codeImplementation="# Simple Python implementation\ndef simple_implementation():\n    print('This is a simulated code implementation')\n    return 'Example result'",
-                language="python"
-            ),
-            ProjectSuggestion(
-                title="Advanced Implementation",
-                description=f"A more complex implementation of the concepts in {paper_data.title}",
+                title="Generated Code Implementation",
+                description=f"An advanced code implementation based on the concepts in {paper_data.title}",
                 difficulty="Advanced",
-                codeImplementation="import torch\nimport torch.nn as nn\n\nclass AdvancedModel(nn.Module):\n    def __init__(self):\n        super().__init__()\n        self.layers = nn.Sequential(\n            nn.Linear(100, 50),\n            nn.ReLU(),\n            nn.Linear(50, 10)\n        )\n    \n    def forward(self, x):\n        return self.layers(x)",
-                language="python"
+                codeImplementation=code_implementation.strip(),
+                language="python"  # Assuming Python as the default language
             )
-        ]
+        )
 
         return ProcessedPaper(
-            summary=summary,
-            keyPoints=key_points,
+            summary=summary_text.strip(),
+            keyPoints=[],  # Removed key points
             projectSuggestions=project_suggestions
         )
 
