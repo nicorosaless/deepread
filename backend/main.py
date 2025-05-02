@@ -16,7 +16,7 @@ app = FastAPI()
 # Enable CORS for our frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend URL
+    allow_origins=["https://paper-to-practice-path-production.up.railway.app"],  # Replace "*" with the production URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
