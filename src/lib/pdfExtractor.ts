@@ -1,6 +1,6 @@
 import { PaperData, ProcessedPaper } from './types';
 
-const API_BASE_URL = 'https://paper-to-practice-path-production.onrender.com'; // Updated to match the deployed FastAPI server URL
+const API_BASE_URL = 'https://deepread.vercel.app'; // Updated to match the deployed FastAPI server URL
 
 export async function extractTextFromPDF(file: File): Promise<PaperData> {
   try {
