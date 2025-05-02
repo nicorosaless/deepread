@@ -14,12 +14,11 @@ from groq import Groq
 app = FastAPI()
 
 # Enable CORS for our frontend
-# Update CORS configuration to allow requests from 'https://deepread.vercel.app'
+# Eliminar cualquier referencia a Railway y ajustar la configuración de CORS para permitir únicamente solicitudes desde Vercel
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-          # Existing production URL
-        "https://deepread.vercel.app"  # New Vercel deployment URL
+        "https://deepread.vercel.app"  # Permitir solo solicitudes desde Vercel
     ],
     allow_credentials=True,
     allow_methods=["*"],
