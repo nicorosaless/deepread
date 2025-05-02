@@ -1,7 +1,6 @@
-
 import { PaperData, ProcessedPaper } from './types';
 
-const API_BASE_URL = 'http://localhost:8000'; // Update this to match your FastAPI server URL
+const API_BASE_URL = 'https://my-app.up.railway.app'; // Updated to match the deployed FastAPI server URL
 
 export async function extractTextFromPDF(file: File): Promise<PaperData> {
   try {
