@@ -2,13 +2,14 @@ services:
   - type: web
     name: paper-to-practice-backend
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python startserver.py"
+    buildCommand: "python3 backend/startserver.py"
     region: oregon
     plan: free
     envVars:
       - key: GROQ_API_KEY
         sync: false
+      - key: PORT
+        value: "8080"
   - type: web
     name: paper-to-practice-frontend
     env: node
