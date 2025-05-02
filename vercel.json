@@ -6,7 +6,7 @@
       "use": "@vercel/python"
     },
     {
-      "src": "src/main.tsx",
+      "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
         "distDir": "dist"
