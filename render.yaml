@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: paper-to-practice-backend
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python startserver.py"
+    region: oregon
+    plan: free
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+  - type: web
+    name: paper-to-practice-frontend
+    env: node
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run preview"
+    region: oregon
+    plan: free
