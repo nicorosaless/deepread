@@ -14,9 +14,13 @@ from groq import Groq
 app = FastAPI()
 
 # Enable CORS for our frontend
+# Update CORS configuration to allow requests from 'https://deepread.vercel.app'
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://paper-to-practice-path-production.onrender.com"],  # Replace "*" with the production URL
+    allow_origins=[
+          # Existing production URL
+        "https://deepread.vercel.app"  # New Vercel deployment URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
