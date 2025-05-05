@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Toaster } from '@/components/ui/toaster';
 import { ArrowUp } from 'lucide-react';
+import Header from '@/components/Header';
 import FileUploader from '@/components/FileUploader';
 import LoadingState from '@/components/LoadingState';
 import PaperSummary from '@/components/PaperSummary';
 import ProjectSuggestions from '@/components/ProjectSuggestions';
-import { extractTextFromPDF, processPaperWithLLM } from '@/lib/pdfExtractor';
+import { extractTextFromPDF, processPaperWithLLM } from '@/lib/api';
 import { PaperData, ProcessedPaper } from '@/lib/types';
 
 const Index = () => {
@@ -48,25 +49,14 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-paper text-white py-6 shadow-md">
-        <div className="container">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">DeepRead</h1>
-              <p className="text-paper-light mt-1">
-                Transform academic papers into practical implementations
-              </p>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background">
+      <Header />
 
       <main className="container py-8">
         <div className="max-w-4xl mx-auto space-y-10">
           {/* File uploader section */}
           <section>
-            <h2 className="text-2xl font-semibold mb-6 text-gray-800">Upload Paper</h2>
+            <h2 className="text-2xl font-semibold mb-6">Upload Paper</h2>
             <FileUploader 
               onFileSelected={handleFileSelected} 
               isProcessing={isProcessing} 
@@ -87,7 +77,7 @@ const Index = () => {
               <Separator className="my-8" />
               
               <section>
-                <h2 className="text-2xl font-semibold mb-6 text-gray-800">Summary & Analysis</h2>
+                <h2 className="text-2xl font-semibold mb-6">Summary & Analysis</h2>
                 <PaperSummary
                   title={paperData?.title || "Untitled Paper"}
                   summary={processedData.summary}
@@ -100,7 +90,7 @@ const Index = () => {
               <Separator className="my-8" />
               
               <section>
-                <h2 className="text-2xl font-semibold mb-6 text-gray-800">
+                <h2 className="text-2xl font-semibold mb-6">
                   Suggested Implementation Projects
                 </h2>
                 <ProjectSuggestions projects={processedData.projectSuggestions} />
@@ -110,7 +100,7 @@ const Index = () => {
                 <Button
                   onClick={scrollToTop}
                   size="icon"
-                  className="rounded-full bg-paper hover:bg-paper-dark shadow-lg"
+                  className="rounded-full shadow-lg"
                 >
                   <ArrowUp className="h-5 w-5" />
                 </Button>
@@ -120,10 +110,10 @@ const Index = () => {
         </div>
       </main>
 
-      <footer className="bg-gray-100 border-t py-8">
+      <footer className="bg-secondary border-t py-8">
         <div className="container">
           <div className="text-center">
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               DeepRead | Building bridges between academic research and practical implementation
             </p>
           </div>

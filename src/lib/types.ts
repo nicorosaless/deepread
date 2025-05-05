@@ -20,3 +20,17 @@ export interface ProjectSuggestion {
   codeImplementation: string;
   language: string;
 }
+
+// Authentication types
+export interface UserData {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface AuthState {
+  isAuthenticated: boolean;
+  user: UserData | null;
+  token: string | null;
+  loading: boolean;
+}

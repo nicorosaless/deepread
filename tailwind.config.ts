@@ -64,12 +64,12 @@ export default {
 					ring: 'hsl(var(--sidebar-ring))'
 				},
 				paper: {
-					DEFAULT: '#1e3a8a',  // Azul académico
-					light: '#3b82f6',
-					dark: '#1e3a8a'
+					DEFAULT: '#6d28d9',  // Purple
+					light: '#8b5cf6',
+					dark: '#5b21b6'
 				},
 				implementation: {
-					DEFAULT: '#10b981',  // Verde implementación
+					DEFAULT: '#10b981',  // Green implementation
 					light: '#34d399',
 					dark: '#059669'
 				}
