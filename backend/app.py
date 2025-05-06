@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -26,8 +25,9 @@ app.add_middleware(
 )
 
 # MongoDB Connection
-MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-DATABASE_NAME = "deepread_db"
+MONGODB_URL = os.getenv("MONGODB_URI", "mongodb+srv://nirogo06:heyho@cluster0.ythepr9.mongodb.net/")
+DATABASE_NAME = "DeepRead"
+USERS_COLLECTION = "users"  # Declaración explícita del nombre de la colección
 
 # Together AI API Key
 TOGETHER_API_KEY = "b31965744154f5ba00c848c3817641bfba87872ac700f27fb130306fbd764e21"
@@ -46,7 +46,7 @@ async def startup_db_client():
     client = AsyncIOMotorClient(MONGODB_URL)
     # Create indexes
     db = client[DATABASE_NAME]
-    await db.users.create_index("email", unique=True)
+    await db[USERS_COLLECTION].create_index("email", unique=True)
     # Initialize Together AI client
     app.state.together_client = Together(api_key=TOGETHER_API_KEY)
     
@@ -115,7 +115,7 @@ async def get_current_user(token: str = Depends(lambda x: x.headers.get("Authori
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     
     db = await get_db()
-    user = await db.users.find_one({"_id": user_id})
+    user = await db[USERS_COLLECTION].find_one({"_id": user_id})
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
     
@@ -136,7 +136,7 @@ async def register(user: UserCreate):
     }
     
     try:
-        result = await db.users.insert_one(user_data)
+        result = await db[USERS_COLLECTION].insert_one(user_data)
         user_id = str(result.inserted_id)
         
         access_token = create_access_token({"sub": user_id})
@@ -148,7 +148,7 @@ async def register(user: UserCreate):
 async def login(user: UserLogin):
     db = await get_db()
     
-    db_user = await db.users.find_one({"email": user.email})
+    db_user = await db[USERS_COLLECTION].find_one({"email": user.email})
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
