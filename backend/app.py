@@ -15,6 +15,14 @@ import io
 
 app = FastAPI(title="DeepRead API")
 
+# Agregar manejador global de excepciones
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"}
+    )
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
@@ -410,6 +418,3 @@ async def process_paper(paper_data: PaperData):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Paper processing failed: {str(e)}")
 
-# Main entry point
-if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

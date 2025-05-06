@@ -1,4 +1,3 @@
-
 import { PaperData, ProcessedPaper, UserData } from "./types";
 import BASE_URL from "./utils";
 
@@ -13,11 +12,18 @@ export async function registerUser(name: string, email: string, password: string
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || 'Registration failed');
+    const errorText = await response.text();
+    try {
+      const errorData = JSON.parse(errorText);
+      throw new Error(errorData.detail || 'Registration failed');
+    } catch (parseError) {
+      // Si la respuesta no es JSON válido, usa el texto completo
+      throw new Error(`Registration failed: ${errorText}`);
+    }
   }
 
-  return await response.json();
+  const data = await response.json();
+  return { token: data.access_token }; // Asegúrate de convertir access_token a token
 }
 
 export async function loginUser(email: string, password: string): Promise<{ token: string }> {
@@ -30,8 +36,14 @@ export async function loginUser(email: string, password: string): Promise<{ toke
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || 'Login failed');
+    const errorText = await response.text();
+    try {
+      const errorData = JSON.parse(errorText);
+      throw new Error(errorData.detail || 'Login failed');
+    } catch (parseError) {
+      // Si la respuesta no es JSON válido, usa el texto completo
+      throw new Error(`Login failed: ${errorText}`);
+    }
   }
 
   const data = await response.json();
@@ -46,8 +58,14 @@ export async function getUserProfile(token: string): Promise<UserData> {
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || 'Failed to fetch user profile');
+    const errorText = await response.text();
+    try {
+      const errorData = JSON.parse(errorText);
+      throw new Error(errorData.detail || 'Failed to fetch user profile');
+    } catch (parseError) {
+      // Si la respuesta no es JSON válido, usa el texto completo
+      throw new Error(`Failed to fetch user profile: ${errorText}`);
+    }
   }
 
   return await response.json();
@@ -64,8 +82,13 @@ export async function extractTextFromPDF(file: File): Promise<PaperData> {
   });
   
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || 'Error extracting text from PDF');
+    const errorText = await response.text();
+    try {
+      const errorData = JSON.parse(errorText);
+      throw new Error(errorData.detail || 'Error extracting text from PDF');
+    } catch (parseError) {
+      throw new Error(`Error extracting text from PDF: ${errorText}`);
+    }
   }
   
   return await response.json();
@@ -81,8 +104,13 @@ export async function processPaperWithLLM(paperData: PaperData): Promise<Process
   });
   
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || 'Error processing paper with LLM');
+    const errorText = await response.text();
+    try {
+      const errorData = JSON.parse(errorText);
+      throw new Error(errorData.detail || 'Error processing paper with LLM');
+    } catch (parseError) {
+      throw new Error(`Error processing paper with LLM: ${errorText}`);
+    }
   }
   
   return await response.json();
