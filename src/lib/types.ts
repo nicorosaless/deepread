@@ -1,4 +1,3 @@
-
 export interface PaperData {
   title: string;
   content: string;
@@ -33,4 +32,21 @@ export interface AuthState {
   user: UserData | null;
   token: string | null;
   loading: boolean;
+}
+
+// Chat types
+export interface ChatMessage {
+  id: string;
+  content: string;
+  role: "user" | "assistant";
+  paperData?: PaperData | null;
+  processedData?: ProcessedPaper | null;
+  timestamp: Date;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  lastUpdated: Date;
+  messages: ChatMessage[];
 }

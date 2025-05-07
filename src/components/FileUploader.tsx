@@ -3,14 +3,19 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FileText, Upload } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 interface FileUploaderProps {
   onFileSelected: (file: File) => void;
   isProcessing: boolean;
+  showTokenButton?: boolean;
 }
 
-const FileUploader: React.FC<FileUploaderProps> = ({ onFileSelected, isProcessing }) => {
+const FileUploader: React.FC<FileUploaderProps> = ({ 
+  onFileSelected, 
+  isProcessing, 
+  showTokenButton = false 
+}) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { toast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -66,15 +71,27 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileSelected, isProcessin
       />
       
       <div className="space-y-3 w-full max-w-xs">
-        <Button 
-          onClick={handleButtonClick} 
-          variant="outline" 
-          className="w-full"
-          disabled={isProcessing}
-        >
-          <Upload className="mr-2 h-4 w-4" />
-          Select PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleButtonClick} 
+            variant="outline" 
+            className="flex-1"
+            disabled={isProcessing}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Select PDF
+          </Button>
+          
+          {showTokenButton && (
+            <Button
+              variant="outline"
+              className="font-medium"
+              disabled={isProcessing}
+            >
+              1000
+            </Button>
+          )}
+        </div>
         
         {selectedFile && (
           <div className="flex flex-col space-y-2">

@@ -1,41 +1,66 @@
 
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const Header = () => {
-  const { user, logout } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
+  const location = useLocation();
 
   return (
-    <header className="bg-primary text-white py-4 shadow-md">
-      <div className="container">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">DeepRead</h1>
-            <p className="mt-1 text-primary-foreground/80">
-              Transform academic papers into practical implementations
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            {user && (
-              <>
-                <div className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  <span>{user.name}</span>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={logout}
-                  className="bg-transparent border-white text-white hover:bg-white/20"
+    <header className="bg-background border-b py-4">
+      <div className="container mx-auto flex items-center justify-between">
+        <div className="flex items-center space-x-1">
+          <Link to="/" className="text-xl font-bold text-paper">DeepRead</Link>
+          <span className="text-sm text-muted-foreground">.ai</span>
+        </div>
+
+        <nav>
+          <ul className="flex items-center space-x-6">
+            <li>
+              <Link 
+                to="/" 
+                className={`text-sm ${location.pathname === '/' ? 'text-paper font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Home
+              </Link>
+            </li>
+            {isAuthenticated && (
+              <li>
+                <Link 
+                  to="/chat" 
+                  className={`text-sm ${location.pathname === '/chat' ? 'text-paper font-medium' : 'text-muted-foreground hover:text-foreground'}`}
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Button>
-              </>
+                  Chat
+                </Link>
+              </li>
             )}
-          </div>
+          </ul>
+        </nav>
+
+        <div className="flex items-center space-x-4">
+          {isAuthenticated ? (
+            <>
+              <span className="text-sm text-muted-foreground">{user?.name}</span>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => logout()}
+              >
+                Sign Out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Link to="/login">
+                <Button variant="outline" size="sm">Sign In</Button>
+              </Link>
+              <Link to="/register">
+                <Button size="sm">Register</Button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

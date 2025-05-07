@@ -1,15 +1,15 @@
 
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Toaster } from '@/components/ui/toaster';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, MessageSquare } from 'lucide-react';
 import Header from '@/components/Header';
 import FileUploader from '@/components/FileUploader';
 import LoadingState from '@/components/LoadingState';
 import PaperSummary from '@/components/PaperSummary';
 import ProjectSuggestions from '@/components/ProjectSuggestions';
-import { extractTextFromPDF, processPaperWithLLM } from '@/lib/api';
+import { extractTextFromPDF, processPaperWithLLM } from '@/lib/pdfExtractor';
 import { PaperData, ProcessedPaper } from '@/lib/types';
 
 const Index = () => {
@@ -54,13 +54,27 @@ const Index = () => {
 
       <main className="container py-8">
         <div className="max-w-4xl mx-auto space-y-10">
-          {/* File uploader section */}
-          <section>
-            <h2 className="text-2xl font-semibold mb-6">Upload Paper</h2>
-            <FileUploader 
-              onFileSelected={handleFileSelected} 
-              isProcessing={isProcessing} 
-            />
+          {/* Hero section with chat link */}
+          <section className="text-center py-12">
+            <h1 className="text-4xl font-bold mb-4 text-foreground">Welcome to DeepRead</h1>
+            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+              Transforming complex research papers into accessible knowledge and actionable projects
+            </p>
+            <div className="flex justify-center gap-4">
+              <FileUploader 
+                onFileSelected={handleFileSelected} 
+                isProcessing={isProcessing}
+                showTokenButton={true}
+              />
+            </div>
+            <div className="mt-8">
+              <Link to="/chat">
+                <Button variant="outline" className="gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Open Chat Interface
+                </Button>
+              </Link>
+            </div>
           </section>
 
           {/* Processing state */}
@@ -119,8 +133,6 @@ const Index = () => {
           </div>
         </div>
       </footer>
-      
-      <Toaster />
     </div>
   );
 };
