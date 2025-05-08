@@ -54,7 +54,7 @@ const Register = () => {
     
     try {
       const result = await registerUser(data.name, data.email, data.password);
-      await login(result.token);
+      await login(result.token); // Changed to pass just the token
       toast({
         title: 'Registration successful',
         description: 'Your account has been created',

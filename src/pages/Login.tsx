@@ -47,7 +47,7 @@ const Login = () => {
     
     try {
       const result = await loginUser(data.email, data.password);
-      await login(result.token);
+      await login(result.token); // Changed to pass just the token
       navigate('/');
     } catch (error) {
       console.error('Login error:', error);

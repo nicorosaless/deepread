@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from '@/lib/types';
@@ -8,22 +9,22 @@ interface ChatHistoryProps {
   messages: ChatMessage[];
   isProcessing: boolean;
   processingStage: string;
-  // handleFileSelected: (file: File) => Promise<void>; // Removed handleFileSelected prop
+  handleFileSelected: (file: File) => Promise<void>; // Added handleFileSelected prop
   messagesEndRef: React.RefObject<HTMLDivElement>;
-  // showFileUploader: boolean; // Removed showFileUploader prop
+  showFileUploader: boolean; // Added showFileUploader prop
 }
 
 const ChatHistory: React.FC<ChatHistoryProps> = ({
   messages,
   isProcessing,
   processingStage,
-  // handleFileSelected, // Removed handleFileSelected
+  handleFileSelected, // Added handleFileSelected
   messagesEndRef,
-  // showFileUploader // Removed showFileUploader
+  showFileUploader // Added showFileUploader
 }) => {
   return (
     <ScrollArea className="flex-1 px-4">
-      {messages.length === 0 && !isProcessing ? ( // Added !isProcessing condition
+      {messages.length === 0 && !isProcessing ? (
         <div className="flex flex-col items-center justify-center h-full py-12 text-center">
           <h2 className="text-2xl font-semibold mb-2">Welcome to DeepRead</h2>
           <p className="text-muted-foreground mb-8 max-w-md">
