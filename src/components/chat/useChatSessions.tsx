@@ -1,12 +1,13 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // Added useEffect
 import { ChatSession, ChatMessage, PaperData, ProcessedPaper } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
 import { extractTextFromPDF, processPaperWithLLM } from '@/lib/pdfExtractor';
+import { useAuth } from '@/context/AuthContext'; // Import useAuth
 
 export function useChatSessions() {
   const { toast } = useToast();
+  const { refreshUserProfile, user } = useAuth(); // Get refreshUserProfile and user from useAuth
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingStage, setProcessingStage] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -21,6 +22,13 @@ export function useChatSessions() {
   const [currentSessionId, setCurrentSessionId] = useState<string>('default');
   const [currentPaperData, setCurrentPaperData] = useState<PaperData | null>(null);
   const [currentProcessedData, setCurrentProcessedData] = useState<ProcessedPaper | null>(null);
+
+  // Effect to refresh user profile when currentSessionId changes or user object changes (e.g. after login)
+  useEffect(() => {
+    if (refreshUserProfile) {
+      refreshUserProfile();
+    }
+  }, [currentSessionId, user?.id]); // Added user.id as a dependency
 
   // Get current chat session
   const currentSession = chatSessions.find(session => session.id === currentSessionId) || chatSessions[0];
@@ -42,6 +50,7 @@ export function useChatSessions() {
     setCurrentSessionId(newSession.id);
     setCurrentPaperData(null);
     setCurrentProcessedData(null);
+    // No need to call refreshUserProfile here, useEffect will handle it due to currentSessionId change
   };
 
   const handleSessionSelect = (sessionId: string) => {
@@ -57,6 +66,7 @@ export function useChatSessions() {
       
     setCurrentPaperData(lastUserMessageWithPaper?.paperData || null);
     setCurrentProcessedData(lastUserMessageWithPaper?.processedData || null);
+    // No need to call refreshUserProfile here, useEffect will handle it due to currentSessionId change
   };
 
   const handleFileSelected = async (file: File) => {
@@ -112,13 +122,28 @@ export function useChatSessions() {
       
       // Clear the selected file
       setSelectedFile(null);
-    } catch (error) {
-      console.error('Error processing file:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error processing file',
-        description: 'There was a problem analyzing your paper. Please try again.'
-      });
+
+      // Refresh user profile to update credits
+      if (refreshUserProfile) {
+        await refreshUserProfile();
+      }
+
+    } catch (error: any) { // Added type assertion for error
+      console.error('Error processing file:', error); // Log the actual error object
+      // Check if error and error.message exist, then trim and compare
+      if (error && typeof error.message === 'string' && error.message.trim() === 'Insufficient credits') {
+        toast({
+          variant: 'destructive',
+          title: 'Error processing file',
+          description: 'Insufficient credits'
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Error processing file',
+          description: 'There was a problem analyzing your paper. Please try again.'
+        });
+      }
       setIsProcessing(false);
       setSelectedFile(null);
     }

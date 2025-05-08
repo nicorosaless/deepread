@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { PaperData, ProcessedPaper } from '@/lib/types';
 import { Separator } from '@/components/ui/separator';
@@ -28,7 +27,6 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
           <PaperSummary
             title={paperData.title || "Untitled Paper"}
             summary={processedData.summary}
-            keyPoints={processedData.keyPoints}
             authors={paperData.authors}
             date={paperData.date}
           />

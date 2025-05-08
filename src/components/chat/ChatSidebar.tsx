@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { ChatSession } from '@/lib/types';
@@ -13,7 +12,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus } from 'lucide-react'; // Removed Coins icon
 
 interface ChatSidebarProps {
   chatSessions: ChatSession[];
@@ -66,8 +65,9 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/50 px-4 py-3">
-        <div className="flex items-center text-xs text-sidebar-foreground/70">
+        <div className="flex flex-col space-y-2 text-xs text-sidebar-foreground/70">
           <span>Logged in as {user?.name}</span>
+          {/* Credit display removed from here */}
         </div>
       </SidebarFooter>
     </>

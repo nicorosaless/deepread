@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -18,24 +17,7 @@ const Header = () => {
 
         <nav>
           <ul className="flex items-center space-x-6">
-            <li>
-              <Link 
-                to="/" 
-                className={`text-sm ${location.pathname === '/' ? 'text-paper font-medium' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Home
-              </Link>
-            </li>
-            {isAuthenticated && (
-              <li>
-                <Link 
-                  to="/chat" 
-                  className={`text-sm ${location.pathname === '/chat' ? 'text-paper font-medium' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  Chat
-                </Link>
-              </li>
-            )}
+            {/* Chat link removed */}
           </ul>
         </nav>
 

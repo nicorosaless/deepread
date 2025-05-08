@@ -12,11 +12,15 @@ export interface ProcessedPaper {
   projectSuggestions: ProjectSuggestion[];
 }
 
+export interface CodeFile {
+  filename: string;
+  code: string;
+}
+
 export interface ProjectSuggestion {
   title: string;
   description: string;
-  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
-  codeImplementation: string;
+  codeImplementation: CodeFile[]; // Changed from string to CodeFile[]
   language: string;
 }
 
@@ -25,6 +29,7 @@ export interface UserData {
   id: string;
   email: string;
   name: string;
+  credits: number; // Added credits field
 }
 
 export interface AuthState {
@@ -49,4 +54,16 @@ export interface ChatSession {
   title: string;
   lastUpdated: Date;
   messages: ChatMessage[];
+}
+
+export interface AuthContextType {
+  isAuthenticated: boolean;
+  user: UserData | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  logout: () => void;
+  loading: boolean;
+  error: string | null;
+  updateUserCredits: (newCredits: number) => void; // Added updateUserCredits
+  refreshUserProfile?: () => Promise<void>; // Added refreshUserProfile
 }

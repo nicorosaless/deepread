@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -8,13 +7,13 @@ import { useToast } from '@/hooks/use-toast';
 interface FileUploaderProps {
   onFileSelected: (file: File) => void;
   isProcessing: boolean;
-  showTokenButton?: boolean;
+  // showTokenButton?: boolean; // Removed showTokenButton prop as it's no longer used
 }
 
 const FileUploader: React.FC<FileUploaderProps> = ({ 
   onFileSelected, 
   isProcessing, 
-  showTokenButton = false 
+  // showTokenButton = false // Removed showTokenButton prop
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { toast } = useToast();
@@ -82,15 +81,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
             Select PDF
           </Button>
           
-          {showTokenButton && (
-            <Button
-              variant="outline"
-              className="font-medium"
-              disabled={isProcessing}
-            >
-              1000
-            </Button>
-          )}
+          {/* Removed the conditionally rendered credit button */}
         </div>
         
         {selectedFile && (

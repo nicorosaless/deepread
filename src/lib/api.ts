@@ -85,8 +85,14 @@ export async function extractTextFromPDF(file: File): Promise<PaperData> {
     const errorText = await response.text();
     try {
       const errorData = JSON.parse(errorText);
+      if (errorData.detail && errorData.detail.startsWith('Insufficient credits')) {
+        throw new Error('Insufficient credits');
+      }
       throw new Error(errorData.detail || 'Error extracting text from PDF');
     } catch (parseError) {
+      if (errorText.includes('Insufficient credits')) {
+        throw new Error('Insufficient credits');
+      }
       throw new Error(`Error extracting text from PDF: ${errorText}`);
     }
   }
@@ -107,8 +113,14 @@ export async function processPaperWithLLM(paperData: PaperData): Promise<Process
     const errorText = await response.text();
     try {
       const errorData = JSON.parse(errorText);
+      if (errorData.detail && errorData.detail.startsWith('Insufficient credits')) {
+        throw new Error('Insufficient credits');
+      }
       throw new Error(errorData.detail || 'Error processing paper with LLM');
     } catch (parseError) {
+      if (errorText.includes('Insufficient credits')) {
+        throw new Error('Insufficient credits');
+      }
       throw new Error(`Error processing paper with LLM: ${errorText}`);
     }
   }

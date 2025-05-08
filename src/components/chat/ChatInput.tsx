@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Upload } from 'lucide-react';
@@ -43,14 +42,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </Button>
           )}
           
-          <Button
-            variant="outline"
-            size="sm"
-            className="font-medium"
-            disabled={isProcessing}
-          >
-            1000
-          </Button>
+          {/* Removed hardcoded 1000 credit button */}
         </div>
       </div>
     </div>

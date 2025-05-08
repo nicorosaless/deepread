@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import Header from '@/components/Header';
@@ -7,6 +6,9 @@ import ChatHistory from '@/components/chat/ChatHistory';
 import ChatInput from '@/components/chat/ChatInput';
 import PaperAnalysis from '@/components/chat/PaperAnalysis';
 import { useChatSessions } from '@/components/chat/useChatSessions';
+import { useAuth } from '@/context/AuthContext'; // Added import
+import { Button } from '@/components/ui/button'; // Added import
+import { Coins } from 'lucide-react'; // Added import
 
 const Chat = () => {
   const {
@@ -22,6 +24,7 @@ const Chat = () => {
     handleSessionSelect,
     handleFileSelected
   } = useChatSessions();
+  const { user } = useAuth(); // Added useAuth hook
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -57,6 +60,15 @@ const Chat = () => {
           
           <div className="container mx-auto flex flex-col h-[calc(100vh-64px)]">
             <div className="flex-1 overflow-hidden flex flex-col">
+              {/* Added credit display button */}
+              {user && (
+                <div className="flex justify-end p-2">
+                  <Button variant="outline" size="sm">
+                    <Coins className="h-4 w-4 mr-2" />
+                    Credits: {user?.credits ?? 0}
+                  </Button>
+                </div>
+              )}
               <ChatHistory 
                 messages={currentSession.messages}
                 isProcessing={isProcessing}

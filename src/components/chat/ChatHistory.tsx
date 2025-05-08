@@ -1,42 +1,35 @@
-
 import React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from '@/lib/types';
-import FileUploader from '@/components/FileUploader';
+// import FileUploader from '@/components/FileUploader'; // Removed FileUploader import
 import LoadingState from '@/components/LoadingState';
 
 interface ChatHistoryProps {
   messages: ChatMessage[];
   isProcessing: boolean;
   processingStage: string;
-  handleFileSelected: (file: File) => Promise<void>;
+  // handleFileSelected: (file: File) => Promise<void>; // Removed handleFileSelected prop
   messagesEndRef: React.RefObject<HTMLDivElement>;
-  showFileUploader: boolean;
+  // showFileUploader: boolean; // Removed showFileUploader prop
 }
 
 const ChatHistory: React.FC<ChatHistoryProps> = ({
   messages,
   isProcessing,
   processingStage,
-  handleFileSelected,
+  // handleFileSelected, // Removed handleFileSelected
   messagesEndRef,
-  showFileUploader
+  // showFileUploader // Removed showFileUploader
 }) => {
   return (
     <ScrollArea className="flex-1 px-4">
-      {messages.length === 0 ? (
+      {messages.length === 0 && !isProcessing ? ( // Added !isProcessing condition
         <div className="flex flex-col items-center justify-center h-full py-12 text-center">
           <h2 className="text-2xl font-semibold mb-2">Welcome to DeepRead</h2>
           <p className="text-muted-foreground mb-8 max-w-md">
             Upload a PDF of an arXiv paper to get started. I'll analyze it and provide a summary and implementation suggestions.
           </p>
-          {showFileUploader && (
-            <FileUploader 
-              onFileSelected={handleFileSelected} 
-              isProcessing={isProcessing} 
-              showTokenButton={true}
-            />
-          )}
+          {/* FileUploader component removed from here */}
         </div>
       ) : (
         <div className="py-8 space-y-6">

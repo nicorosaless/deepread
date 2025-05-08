@@ -1,11 +1,9 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/context/AuthContext";
-import Index from "./pages/Index";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -13,6 +11,11 @@ import Chat from "./pages/Chat";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
+
+const RootRedirect = () => {
+  const { isAuthenticated } = useAuth();
+  return <Navigate to={isAuthenticated ? "/chat" : "/login"} replace />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -22,16 +25,9 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
+            <Route path="/" element={<RootRedirect />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route 
-              path="/" 
-              element={
-                <ProtectedRoute>
-                  <Index />
-                </ProtectedRoute>
-              } 
-            />
             <Route 
               path="/chat" 
               element={
