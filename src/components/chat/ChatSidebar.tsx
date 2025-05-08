@@ -13,6 +13,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
 
 interface ChatSidebarProps {
   chatSessions: ChatSession[];
@@ -40,6 +41,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
             className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             onClick={handleNewChat}
           >
+            <Plus className="h-4 w-4 mr-1" />
             New Chat
           </Button>
         </div>

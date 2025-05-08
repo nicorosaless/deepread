@@ -17,6 +17,7 @@ const Chat = () => {
     currentSession,
     currentPaperData,
     currentProcessedData,
+    fileUploadedForCurrentSession,
     handleNewChat,
     handleSessionSelect,
     handleFileSelected
@@ -62,11 +63,13 @@ const Chat = () => {
                 processingStage={processingStage}
                 handleFileSelected={handleFileSelected}
                 messagesEndRef={messagesEndRef}
+                showFileUploader={!fileUploadedForCurrentSession}
               />
               
               <ChatInput 
                 isProcessing={isProcessing}
                 handleFileSelected={handleFileSelected}
+                showFileUploader={!fileUploadedForCurrentSession}
               />
             </div>
             

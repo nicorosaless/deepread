@@ -24,6 +24,11 @@ export function useChatSessions() {
 
   // Get current chat session
   const currentSession = chatSessions.find(session => session.id === currentSessionId) || chatSessions[0];
+  
+  // Check if a file has already been uploaded for the current session
+  const fileUploadedForCurrentSession = currentSession.messages.some(message => 
+    message.role === 'user' && message.paperData !== undefined
+  );
 
   const handleNewChat = () => {
     const newSession: ChatSession = {
@@ -128,6 +133,7 @@ export function useChatSessions() {
     currentSession,
     currentPaperData,
     currentProcessedData,
+    fileUploadedForCurrentSession,
     handleNewChat,
     handleSessionSelect,
     handleFileSelected

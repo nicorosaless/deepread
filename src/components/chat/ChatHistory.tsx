@@ -11,6 +11,7 @@ interface ChatHistoryProps {
   processingStage: string;
   handleFileSelected: (file: File) => Promise<void>;
   messagesEndRef: React.RefObject<HTMLDivElement>;
+  showFileUploader: boolean;
 }
 
 const ChatHistory: React.FC<ChatHistoryProps> = ({
@@ -18,7 +19,8 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   isProcessing,
   processingStage,
   handleFileSelected,
-  messagesEndRef
+  messagesEndRef,
+  showFileUploader
 }) => {
   return (
     <ScrollArea className="flex-1 px-4">
@@ -28,10 +30,13 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
           <p className="text-muted-foreground mb-8 max-w-md">
             Upload a PDF of an arXiv paper to get started. I'll analyze it and provide a summary and implementation suggestions.
           </p>
-          <FileUploader 
-            onFileSelected={handleFileSelected} 
-            isProcessing={isProcessing} 
-          />
+          {showFileUploader && (
+            <FileUploader 
+              onFileSelected={handleFileSelected} 
+              isProcessing={isProcessing} 
+              showTokenButton={true}
+            />
+          )}
         </div>
       ) : (
         <div className="py-8 space-y-6">
