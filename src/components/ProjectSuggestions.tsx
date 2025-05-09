@@ -46,7 +46,7 @@ const ProjectSuggestions: React.FC<ProjectSuggestionsProps> = ({ projects }) => 
 
   return (
     <Card className="w-full bg-[#121212] border-0 shadow-lg overflow-hidden">
-      <CardHeader className="bg-[#10B981] text-white py-4 px-6">
+      <CardHeader className="bg-[#1e1e1e] text-white py-4 px-6 border-b border-[#333]">
         <div className="flex items-center gap-2">
           <ChevronLeftIcon className="h-5 w-5" />
           <ChevronRightIcon className="h-5 w-5" />

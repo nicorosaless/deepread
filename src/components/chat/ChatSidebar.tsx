@@ -12,7 +12,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { LogOut, Plus } from 'lucide-react';
 
 interface ChatSidebarProps {
   chatSessions: ChatSession[];
@@ -27,7 +27,16 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   handleSessionSelect,
   handleNewChat
 }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      // El redireccionamiento debería manejarse en el AuthContext después del logout
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
   return (
     <>
@@ -76,8 +85,19 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
-        <div className="flex flex-col space-y-1 text-xs text-sidebar-foreground/70">
-          <span>{user?.name || 'Guest User'}</span>
+        <div className="flex flex-col space-y-3">
+          <div className="text-xs text-sidebar-foreground/70">
+            <span>{user?.name || 'Guest User'}</span>
+          </div>
+          <Button 
+            variant="outline"
+            size="sm"
+            className="w-full flex items-center justify-center gap-2 text-sidebar-foreground bg-sidebar-accent hover:bg-sidebar-accent/80 border-sidebar-border"
+            onClick={handleSignOut}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
         </div>
       </SidebarFooter>
     </>

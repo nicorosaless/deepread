@@ -18,7 +18,7 @@ const PaperSummary: React.FC<PaperSummaryProps> = ({
 }) => {
   return (
     <Card className="w-full border-primary/20">
-      <CardHeader className="bg-primary text-white rounded-t-lg">
+      <CardHeader className="bg-[#1e1e1e] text-white rounded-t-lg">
         <div className="flex items-center gap-2">
           <Book className="h-5 w-5" />
           <CardTitle>Paper Summary</CardTitle>
