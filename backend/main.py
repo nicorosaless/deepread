@@ -433,7 +433,7 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
         integer_actual_summary_cost = math.ceil(actual_summary_cost)
 
         # Store summary message
-        if db:
+        if db is not None:
             summary_message_record = {
                 "user_id": ObjectId(user_id),
                 "session_id": session_id,
@@ -548,21 +548,6 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
         actual_code_gen_cost = (actual_code_input_tokens + actual_code_output_tokens) * CODE_GEN_COST_PER_TOKEN
         integer_actual_code_gen_cost = math.ceil(actual_code_gen_cost)
 
-        # Store code generation message
-        if db:
-            code_message_record = {
-                "user_id": ObjectId(user_id),
-                "session_id": session_id,
-                "role": "assistant",
-                "content_type": "code_suggestion",
-                "content": cleaned_code_implementation_str, # Storing the cleaned JSON string
-                "input_tokens": actual_code_input_tokens,
-                "output_tokens": actual_code_output_tokens,
-                "estimated_cost": integer_actual_code_gen_cost, # Storing the calculated cost for this part
-                "timestamp": datetime.utcnow()
-            }
-            db[MESSAGES_COLLECTION].insert_one(code_message_record)
-
         # Clean the code_implementation_str before attempting to parse JSON
         # 0. Remove <think> tags
         cleaned_code_implementation_str = re.sub(r'<think>.*?</think>', '', code_implementation_str, flags=re.DOTALL).strip()
@@ -580,6 +565,21 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
         ]
         for pattern in code_prefix_patterns:
             cleaned_code_implementation_str = re.sub(pattern, "", cleaned_code_implementation_str, flags=re.IGNORECASE).strip()
+
+        # Store code generation message
+        if db is not None:
+            code_message_record = {
+                "user_id": ObjectId(user_id),
+                "session_id": session_id,
+                "role": "assistant",
+                "content_type": "code_suggestion",
+                "content": cleaned_code_implementation_str, # Storing the cleaned JSON string
+                "input_tokens": actual_code_input_tokens,
+                "output_tokens": actual_code_output_tokens,
+                "estimated_cost": integer_actual_code_gen_cost, # Storing the calculated cost for this part
+                "timestamp": datetime.utcnow()
+            }
+            db[MESSAGES_COLLECTION].insert_one(code_message_record)
 
         # Try to parse JSON from the cleaned response
         try:

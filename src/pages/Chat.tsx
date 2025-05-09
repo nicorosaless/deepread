@@ -1,14 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
-import Header from '@/components/Header';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import ChatHistory from '@/components/chat/ChatHistory';
 import ChatInput from '@/components/chat/ChatInput';
 import PaperAnalysis from '@/components/chat/PaperAnalysis';
 import { useChatSessions } from '@/components/chat/useChatSessions';
-import { useAuth } from '@/context/AuthContext'; // Added import
-import { Button } from '@/components/ui/button'; // Added import
-import { Coins } from 'lucide-react'; // Added import
+import { useAuth } from '@/context/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Coins } from 'lucide-react';
 
 const Chat = () => {
   const {
@@ -24,7 +23,7 @@ const Chat = () => {
     handleSessionSelect,
     handleFileSelected
   } = useChatSessions();
-  const { user } = useAuth(); // Added useAuth hook
+  const { user } = useAuth();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -45,8 +44,8 @@ const Chat = () => {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="flex min-h-screen w-full bg-background">
-        <Sidebar side="left" variant="inset">
+      <div className="flex min-h-screen w-full bg-background text-foreground">
+        <Sidebar side="left" variant="inset" className="bg-sidebar-background text-sidebar-foreground">
           <ChatSidebar 
             chatSessions={chatSessions}
             currentSessionId={currentSessionId}
@@ -55,42 +54,39 @@ const Chat = () => {
           />
         </Sidebar>
         
-        <SidebarInset>
-          <Header />
-          
-          <div className="container mx-auto flex flex-col h-[calc(100vh-64px)]">
-            <div className="flex-1 overflow-hidden flex flex-col">
-              {/* Added credit display button */}
-              {user && (
-                <div className="flex justify-end p-2">
-                  <Button variant="outline" size="sm">
-                    <Coins className="h-4 w-4 mr-2" />
-                    Credits: {user?.credits ?? 0}
-                  </Button>
-                </div>
-              )}
+        <SidebarInset className="bg-background flex flex-col h-screen">
+          {user && (
+            <div className="flex justify-end p-3 border-b border-border">
+              <Button variant="outline" size="sm" className="text-foreground border-border hover:bg-accent">
+                <Coins className="h-4 w-4 mr-2" />
+                Credits: {user?.credits ?? 0}
+              </Button>
+            </div>
+          )}
+
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto flex flex-col">
               <ChatHistory 
                 messages={currentSession.messages}
                 isProcessing={isProcessing}
                 processingStage={processingStage}
-                handleFileSelected={handleFileSelected}
                 messagesEndRef={messagesEndRef}
-                showFileUploader={!fileUploadedForCurrentSession}
-              />
-              
-              <ChatInput 
-                isProcessing={isProcessing}
                 handleFileSelected={handleFileSelected}
-                showFileUploader={!fileUploadedForCurrentSession}
               />
             </div>
             
-            <PaperAnalysis 
-              paperData={currentPaperData}
-              processedData={currentProcessedData}
-              scrollToTop={scrollToTop}
+            <ChatInput 
+              isProcessing={isProcessing}
             />
           </div>
+          
+          {(currentPaperData || currentProcessedData) && (
+             <PaperAnalysis 
+                paperData={currentPaperData}
+                processedData={currentProcessedData}
+                scrollToTop={scrollToTop}
+              />
+          )}
         </SidebarInset>
       </div>
     </SidebarProvider>

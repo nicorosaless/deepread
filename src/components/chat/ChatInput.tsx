@@ -1,49 +1,18 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Upload } from 'lucide-react';
 
 interface ChatInputProps {
   isProcessing: boolean;
-  handleFileSelected: (file: File) => Promise<void>;
-  showFileUploader: boolean;
+  // handleFileSelected is no longer needed here as FileUploader is in ChatHistory
+  // showFileUploader is no longer needed here
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({
-  isProcessing,
-  handleFileSelected,
-  showFileUploader,
-}) => {
+const ChatInput: React.FC<ChatInputProps> = ({ isProcessing }) => {
   return (
     <div className="p-4 border-t">
       <div className="flex items-center space-x-4">
-        <div className="flex gap-2">
-          {showFileUploader && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => {
-                document.getElementById('file-input')?.click();
-              }}
-              disabled={isProcessing}
-            >
-              <input
-                id="file-input"
-                type="file"
-                accept=".pdf"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                    handleFileSelected(e.target.files[0]);
-                  }
-                }}
-                className="hidden"
-              />
-              <span className="sr-only">Upload paper</span>
-              <Upload className="h-4 w-4" />
-            </Button>
-          )}
-          
-          {/* Removed hardcoded 1000 credit button */}
-        </div>
+        {/* The file upload button is removed from here */}
+        {/* Placeholder for future input elements if any */}
+        {isProcessing && <p className="text-sm text-muted-foreground">Processing...</p>}
       </div>
     </div>
   );

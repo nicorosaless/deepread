@@ -28,21 +28,26 @@ const CodeImplementation: React.FC<CodeImplementationProps> = ({ codeFile, langu
   
   return (
     <div className="space-y-2 my-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center text-white">
         <div className="flex items-center">
-          <span className="text-sm font-semibold text-gray-700 mr-2">File: {codeFile.filename}</span>
-          <span className="text-sm font-medium text-gray-500 mr-2">Language:</span>
-          <span className="text-sm">{language}</span>
+          <span className="text-sm font-semibold mr-2">File: {codeFile.filename}</span>
+          <span className="text-sm font-medium text-gray-400 mr-2">Language:</span>
+          <span className="text-sm text-gray-200">{language}</span>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleCopyCode}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleCopyCode}
+            className="bg-transparent border border-[#444] text-gray-300 hover:bg-[#2a2a2a] hover:text-white"
+          >
             <Check className="h-4 w-4 mr-1" /> Copy Code
           </Button>
         </div>
       </div>
       
-      <Card className="relative font-mono text-sm overflow-x-auto p-4 bg-gray-50 border border-gray-200">
-        <pre className="whitespace-pre-wrap break-all">
+      <Card className="relative font-mono text-sm overflow-x-auto p-4 bg-[#1e1e1e] border border-[#333] text-gray-200 rounded-md">
+        <pre className="whitespace-pre-wrap break-words">
           {codeFile.code}
         </pre>
       </Card>

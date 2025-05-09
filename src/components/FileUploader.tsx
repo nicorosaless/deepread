@@ -1,19 +1,15 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { FileText, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface FileUploaderProps {
   onFileSelected: (file: File) => void;
   isProcessing: boolean;
-  // showTokenButton?: boolean; // Removed showTokenButton prop as it's no longer used
 }
 
 const FileUploader: React.FC<FileUploaderProps> = ({ 
   onFileSelected, 
-  isProcessing, 
-  // showTokenButton = false // Removed showTokenButton prop
+  isProcessing
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { toast } = useToast();
@@ -53,13 +49,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
   };
 
   return (
-    <Card className="p-6 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50">
-      <FileText className="w-12 h-12 text-paper mb-4" />
-      <h3 className="text-xl font-medium mb-2">Upload arXiv Paper</h3>
-      <p className="text-gray-500 mb-4 text-center max-w-md">
-        Upload a PDF file of an arXiv paper to get a summary and implementation suggestions
-      </p>
-      
+    <div className="flex flex-col items-center">
       <input
         type="file"
         accept=".pdf"
@@ -69,29 +59,24 @@ const FileUploader: React.FC<FileUploaderProps> = ({
         disabled={isProcessing}
       />
       
-      <div className="space-y-3 w-full max-w-xs">
-        <div className="flex gap-2">
+      <div className="w-full">
+        {!selectedFile ? (
           <Button 
             onClick={handleButtonClick} 
-            variant="outline" 
-            className="flex-1"
+            variant="outline"
+            className="w-full border-dashed border-gray-500 bg-gray-800 hover:bg-gray-700"
             disabled={isProcessing}
           >
-            <Upload className="mr-2 h-4 w-4" />
             Select PDF
           </Button>
-          
-          {/* Removed the conditionally rendered credit button */}
-        </div>
-        
-        {selectedFile && (
-          <div className="flex flex-col space-y-2">
-            <p className="text-sm text-center break-all">
-              Selected: {selectedFile.name}
-            </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="text-sm text-center text-muted-foreground">
+              {selectedFile.name}
+            </div>
             <Button 
               onClick={handleUpload} 
-              className="w-full bg-paper hover:bg-paper-dark"
+              className="w-full"
               disabled={isProcessing}
             >
               Process Paper
@@ -99,7 +84,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 };
 

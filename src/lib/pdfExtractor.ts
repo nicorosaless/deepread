@@ -95,17 +95,25 @@ export async function processPaperWithLLM(paperData: PaperData): Promise<Process
       if (isInsufficientCreditsError) {
         throw new Error('Insufficient credits');
       } else {
-        throw new Error(`Error processing paper with LLM: ${detailMessage}`);
+        // Evitamos la repetición de "Error processing paper with LLM:" en el mensaje
+        if (detailMessage.startsWith("Error processing paper with LLM:")) {
+          throw new Error(detailMessage);
+        } else {
+          throw new Error(`Error processing paper with LLM: ${detailMessage}`);
+        }
       }
     }
 
     return await response.json();
   } catch (error) {
-    // Log the error before re-throwing if it's not the one we specifically created for insufficient credits
-    // or an auth token issue.
-    if (!(error instanceof Error && (error.message === 'Insufficient credits' || error.message === "Authentication token not found. Please log in."))) {
-        console.error("Error processing paper with LLM:", error);
+    // Evitamos devolver errores anidados como "Error: Error: Error:"
+    if (error instanceof Error) {
+      // Si el error ya viene del bloque anterior, lo pasamos directamente
+      throw error;
+    } else {
+      // Log the error before re-throwing if it's not a known type
+      console.error("Error processing paper with LLM:", error);
+      throw new Error(`Error processing paper: ${error instanceof Error ? error.message : String(error)}`);
     }
-    throw error; // Re-throw the caught error
   }
 }

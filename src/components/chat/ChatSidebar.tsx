@@ -12,7 +12,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react'; // Removed Coins icon
+import { Plus } from 'lucide-react';
 
 interface ChatSidebarProps {
   chatSessions: ChatSession[];
@@ -31,21 +31,21 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   return (
     <>
-      <SidebarHeader className="border-b border-sidebar-border/50 px-4 py-3">
+      <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-sidebar-foreground">Chat History</h2>
+          <h2 className="text-xl font-semibold text-sidebar-foreground">Deepread</h2> 
           <Button 
             variant="ghost" 
-            size="sm" 
+            size="icon"
             className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             onClick={handleNewChat}
+            title="New Chat"
           >
-            <Plus className="h-4 w-4 mr-1" />
-            New Chat
+            <Plus className="h-5 w-5" />
           </Button>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="p-2">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -55,19 +55,29 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     tooltip={session.title}
                     isActive={currentSessionId === session.id}
                     onClick={() => handleSessionSelect(session.id)}
+                    className={`
+                      w-full justify-start text-sm 
+                      ${currentSessionId === session.id 
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+                        : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}
+                    `}
                   >
-                    <span>{session.title}</span>
+                    <span className="truncate">{session.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {chatSessions.length === 0 && (
+                <p className="p-4 text-sm text-sidebar-foreground/70 text-center">
+                  No chat history yet. Start a new chat to see it here.
+                </p>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border/50 px-4 py-3">
-        <div className="flex flex-col space-y-2 text-xs text-sidebar-foreground/70">
-          <span>Logged in as {user?.name}</span>
-          {/* Credit display removed from here */}
+      <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
+        <div className="flex flex-col space-y-1 text-xs text-sidebar-foreground/70">
+          <span>{user?.name || 'Guest User'}</span>
         </div>
       </SidebarFooter>
     </>
