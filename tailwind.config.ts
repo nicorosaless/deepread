@@ -64,33 +64,15 @@ export default {
 					ring: 'hsl(var(--sidebar-ring))'
 				},
 				paper: {
-					DEFAULT: '#9d8470',  // Terracota suave
-					light: '#c7b8a9',
-					dark: '#7d654d'
+					DEFAULT: '#6d28d9',  // Purple
+					light: '#8b5cf6',
+					dark: '#5b21b6'
 				},
 				implementation: {
-					DEFAULT: '#9d8470',  // Cambiado a terracota suave para mantener coherencia
-					light: '#c7b8a9',
-					dark: '#7d654d'
-				},
-				// Nuevos colores cálidos
-				warm: {
-					DEFAULT: '#9d8470', // Terracota suave
-					50: '#faf7f5',
-					100: '#f0e9e2',
-					200: '#e1d5c8',
-					300: '#c7b8a9',
-					400: '#b09988',
-					500: '#9d8470',
-					600: '#8a725e',
-					700: '#7d654d',
-					800: '#665240',
-					900: '#4e3e31',
+					DEFAULT: '#10b981',  // Green implementation
+					light: '#34d399',
+					dark: '#059669'
 				}
-			},
-			fontFamily: {
-				sans: ['Montserrat', 'sans-serif'],
-				body: ['Open Sans', 'sans-serif'],
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
