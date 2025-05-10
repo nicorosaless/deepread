@@ -56,7 +56,8 @@ app.add_middleware(
 MONGODB_URL = os.getenv("MONGODB_URI", "mongodb+srv://nirogo06:heyho@cluster0.ythepr9.mongodb.net/")
 DATABASE_NAME = "DeepRead"
 USERS_COLLECTION = "users"
-MESSAGES_COLLECTION = "messages" # Added messages collection name
+CHAT_SESSIONS_COLLECTION = "chat_sessions" # ADDED
+CHAT_MESSAGES_COLLECTION = "chat_messages" # ADDED
 
 # API Keys
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -70,6 +71,16 @@ JWT_EXPIRATION_DELTA = timedelta(days=7)
 # Models
 # SUMMARY_MODEL and CODE_MODEL are no longer needed as we'll use Google's model directly
 GOOGLE_MODEL_NAME = "gemini-2.0-flash"
+
+# Nuevos modelos para la funcionalidad de chat (MOVED UP)
+class ChatMessage(BaseModel):
+    id: Optional[str] = None
+    content: str
+    role: str
+    paperData: Optional[dict] = None
+    processedData: Optional[dict] = None
+    timestamp: Optional[datetime] = None
+    content_type: Optional[str] = None # Ensured content_type is present
 
 # Database connection setup
 client = None
@@ -139,6 +150,29 @@ class UserResponse(BaseModel):
     email: str
     name: str
     credits: int
+
+class LoginResponse(Token): # Uses ChatMessage, so ChatMessage must be defined first
+    user: UserResponse
+    processed_paper_messages: List[ChatMessage] = []
+
+# Nuevos modelos para la funcionalidad de chat
+class ChatSession(BaseModel):
+    id: Optional[str] = None
+    title: str
+    lastUpdated: Optional[datetime] = None
+    messages: List[ChatMessage] = []
+
+class SaveChatSessionRequest(BaseModel):
+    session: ChatSession
+
+class ChatSessionResponse(BaseModel):
+    id: str
+    title: str
+    lastUpdated: datetime
+    messages: List[ChatMessage]
+
+class ChatSessionsResponse(BaseModel):
+    sessions: List[ChatSession]
 
 class PaperData(BaseModel):
     title: str
@@ -241,7 +275,7 @@ async def register(user: UserCreate):
         print(f"Registration error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
-@app.post("/api/login", response_model=Token)
+@app.post("/api/login", response_model=LoginResponse)
 async def login(user: UserLogin):
     if db is None:
         raise HTTPException(status_code=503, detail="Database connection not available")
@@ -253,8 +287,42 @@ async def login(user: UserLogin):
     if not bcrypt.checkpw(user.password.encode('utf-8'), db_user["password"].encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    access_token = create_access_token({"sub": str(db_user["_id"])})
-    return {"access_token": access_token, "token_type": "bearer"}
+    user_id_str = str(db_user["_id"])
+    access_token = create_access_token({"sub": user_id_str})
+    
+    # Fetch user details for the response
+    user_response = UserResponse(
+        id=user_id_str,
+        email=db_user["email"],
+        name=db_user["name"],
+        credits=db_user.get("credits", 0)
+    )
+    
+    # Fetch processed paper messages
+    processed_messages = []
+    if db is not None:
+        message_cursor = db[CHAT_MESSAGES_COLLECTION].find({ # UPDATED
+            "user_id": ObjectId(user_id_str),
+            "content_type": {"$in": ["summary", "code_suggestion"]}
+        }).sort("timestamp", -1) # Sort by most recent first
+        
+        for msg_doc in message_cursor:
+            processed_messages.append(ChatMessage(
+                id=str(msg_doc["_id"]),
+                content=msg_doc["content"],
+                role=msg_doc["role"],
+                timestamp=msg_doc["timestamp"],
+                paperData=msg_doc.get("paper_context"), # Use paper_context here
+                processedData=None, # Or decide how to populate this
+                content_type=msg_doc.get("content_type") # Added content_type
+            ))
+            
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response,
+        processed_paper_messages=processed_messages
+    )
 
 @app.get("/api/user", response_model=UserResponse)
 async def get_user(current_user: dict = Depends(get_current_user)):
@@ -443,9 +511,10 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
                 "input_tokens": actual_summary_input_tokens,
                 "output_tokens": actual_summary_output_tokens,
                 "estimated_cost": integer_actual_summary_cost, # Storing the calculated cost for this part
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.utcnow(),
+                "paper_context": {"title": paper_data.title, "authors": paper_data.authors, "abstract": paper_data.abstract} # ADDED
             }
-            db[MESSAGES_COLLECTION].insert_one(summary_message_record)
+            db[CHAT_MESSAGES_COLLECTION].insert_one(summary_message_record) # UPDATED
 
         # Clean the summary output for the API response
         summary = summary_text.strip()
@@ -577,9 +646,10 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
                 "input_tokens": actual_code_input_tokens,
                 "output_tokens": actual_code_output_tokens,
                 "estimated_cost": integer_actual_code_gen_cost, # Storing the calculated cost for this part
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.utcnow(),
+                "paper_context": {"title": paper_data.title, "summary_preview": summary[:200] + "..." if summary else ""} # ADDED - summary_preview for context
             }
-            db[MESSAGES_COLLECTION].insert_one(code_message_record)
+            db[CHAT_MESSAGES_COLLECTION].insert_one(code_message_record) # UPDATED
 
         # Try to parse JSON from the cleaned response
         try:
@@ -671,6 +741,349 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
 @app.get("/")
 async def root():
     return {"message": "DeepRead API is running"}
+
+# Endpoints para la gestión de chats
+@app.post("/api/chat/sessions", response_model=ChatSessionResponse)
+async def save_chat_session(request: SaveChatSessionRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Guarda o actualiza una sesión de chat completa.
+    Si la sesión tiene un ID, se actualiza. Si no, se crea una nueva.
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection not available")
+    
+    user_id = current_user["_id"]
+    user_id_str = str(user_id)
+    print(f"Saving chat session for user ID: {user_id_str}")
+    
+    session = request.session
+    now = datetime.utcnow()
+    
+    # Si no tiene lastUpdated o es None, establecerlo ahora
+    if not session.lastUpdated:
+        session.lastUpdated = now
+        
+    print(f"Session to save: id={session.id}, title={session.title}, messages={len(session.messages)}")
+    
+    # Verificar que la colección existe y crearla si no existe
+    if CHAT_SESSIONS_COLLECTION not in db.list_collection_names(): # UPDATED
+        print(f"Collection {CHAT_SESSIONS_COLLECTION} doesn't exist, will be created automatically")
+    
+    # Preparar el documento para MongoDB
+    session_doc = {
+        "user_id": user_id,  # Usar directamente el ObjectId
+        "title": session.title,
+        "last_updated": session.lastUpdated
+    }
+    
+    try:
+        # Verificar si estamos actualizando o creando
+        creating_new = not session.id or session.id == "default" or session.id == "new"
+        
+        if not creating_new:
+            # Verificar si el ID proporcionado es válido
+            try:
+                session_object_id = ObjectId(session.id)
+                print(f"Updating existing session with ID: {session.id}")
+                
+                # Actualizar sesión existente
+                result = db[CHAT_SESSIONS_COLLECTION].update_one( # UPDATED
+                    {"_id": session_object_id, "user_id": user_id},
+                    {"$set": {"title": session.title, "last_updated": session.lastUpdated}}
+                )
+                
+                if result.matched_count == 0:
+                    print(f"No session found with ID {session.id} for user {user_id_str}, creating new")
+                    creating_new = True
+                else:
+                    print(f"Session updated: {result.modified_count} document(s) modified")
+                    session_id = session.id
+            except Exception as e:
+                print(f"Invalid session ID format: {session.id}, error: {str(e)}")
+                creating_new = True
+        
+        if creating_new:
+            # Crear nueva sesión
+            print("Creating new chat session")
+            result = db[CHAT_SESSIONS_COLLECTION].insert_one(session_doc) # UPDATED
+            session_id = str(result.inserted_id)
+            print(f"Created new session with ID: {session_id}")
+        
+        # Manejar los mensajes
+        session_object_id = ObjectId(session_id)
+        
+        # Verificar que la colección de mensajes existe
+        if CHAT_MESSAGES_COLLECTION not in db.list_collection_names(): # UPDATED
+            print(f"Collection {CHAT_MESSAGES_COLLECTION} doesn't exist, will be created automatically")
+        
+        # Primero eliminar los mensajes existentes si estamos actualizando
+        if not creating_new:
+            delete_result = db[CHAT_MESSAGES_COLLECTION].delete_many({"session_id": session_object_id}) # UPDATED
+            print(f"Deleted {delete_result.deleted_count} existing message(s)")
+        
+        # Insertar los nuevos mensajes
+        if session.messages:
+            messages_to_insert = []
+            for msg in session.messages:
+                message_doc = {
+                    "user_id": user_id,  # Usar directamente el ObjectId
+                    "session_id": session_object_id,
+                    "content": msg.content,
+                    "role": msg.role,
+                    "timestamp": msg.timestamp or now
+                }
+                
+                # Si tiene paperData o processedData, incluirlos
+                if msg.paperData:
+                    message_doc["paper_data"] = msg.paperData
+                if msg.processedData:
+                    message_doc["processed_data"] = msg.processedData
+                
+                messages_to_insert.append(message_doc)
+            
+            if messages_to_insert:
+                insert_result = db[CHAT_MESSAGES_COLLECTION].insert_many(messages_to_insert) # UPDATED
+                print(f"Inserted {len(insert_result.inserted_ids)} message(s)")
+        
+        # Verificar que la sesión se creó/actualizó correctamente
+        verification = db[CHAT_SESSIONS_COLLECTION].find_one({"_id": session_object_id}) # UPDATED
+        if verification:
+            print(f"Verified session exists: {verification.get('title', 'No title')}")
+        else:
+            print(f"WARNING: Could not verify session with ID {session_id}")
+        
+        # Verificar el número de mensajes guardados
+        messages_count = db[CHAT_MESSAGES_COLLECTION].count_documents({"session_id": session_object_id})  # UPDATED
+        print(f"Verified {messages_count} message(s) for session {session_id}")
+
+        # Obtener mensajes desde la base de datos en lugar de usar session.messages
+        messages = []
+        messages_cursor = db[CHAT_MESSAGES_COLLECTION].find({"session_id": session_object_id}).sort("timestamp", 1)
+        for msg in messages_cursor:
+            msg_data = {
+                "id": str(msg["_id"]),
+                "content": msg["content"],
+                "role": msg["role"],
+                "timestamp": msg["timestamp"]
+            }
+            if "paper_data" in msg:
+                msg_data["paperData"] = msg["paper_data"]
+            if "processed_data" in msg:
+                msg_data["processedData"] = msg["processed_data"]
+            messages.append(ChatMessage(**msg_data))
+
+        # Devolver la sesión guardada con sus mensajes
+        return {
+            "id": session_id,
+            "title": session.title,
+            "lastUpdated": session.lastUpdated or now,
+            "messages": messages
+        }
+    
+    except Exception as e:
+        print(f"Error saving chat session: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error saving chat session: {str(e)}")
+
+@app.get("/api/chat/sessions", response_model=ChatSessionsResponse)
+async def get_chat_sessions(current_user: dict = Depends(get_current_user)):
+    """
+    Obtiene todas las sesiones de chat del usuario actual.
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection not available")
+    
+    user_id = current_user["_id"]
+    print(f"Finding chat sessions for user ID: {user_id}")
+    
+    try:
+        # Obtener todas las sesiones del usuario
+        # Convertir ObjectId a str para debugging
+        user_id_str = str(user_id)
+        print(f"User ID (str): {user_id_str}")
+        
+        # Verificar que la colección existe
+        collections = db.list_collection_names()
+        print(f"Collections in database: {collections}")
+        if CHAT_SESSIONS_COLLECTION not in collections: # UPDATED
+            print(f"{CHAT_SESSIONS_COLLECTION} collection does not exist in database") # UPDATED
+            return {"sessions": []}
+        
+        # Contar documentos en la colección para debug
+        total_sessions = db[CHAT_SESSIONS_COLLECTION].count_documents({}) # UPDATED
+        user_sessions_count = db[CHAT_SESSIONS_COLLECTION].count_documents({"user_id": user_id}) # UPDATED
+        print(f"Total sessions in DB: {total_sessions}, User sessions: {user_sessions_count}")
+        
+        # Obtener las sesiones usando find
+        sessions_cursor = db[CHAT_SESSIONS_COLLECTION].find({"user_id": user_id}).sort("last_updated", -1) # UPDATED
+        sessions_list = list(sessions_cursor)
+        print(f"Found {len(sessions_list)} sessions for user {user_id_str}")
+        
+        if len(sessions_list) == 0:
+            print("No sessions found for this user")
+            return {"sessions": []}
+        
+        sessions = []
+        
+        # Función no asíncrona para obtener mensajes
+        def get_messages_for_session(session_id):
+            messages_cursor = db[CHAT_MESSAGES_COLLECTION].find({"session_id": session_id}).sort("timestamp", 1) # UPDATED
+            messages = []
+            for msg in messages_cursor:
+                message = {
+                    "id": str(msg["_id"]),
+                    "content": msg["content"],
+                    "role": msg["role"],
+                    "timestamp": msg["timestamp"]
+                }
+                
+                if "paper_data" in msg:
+                    message["paperData"] = msg["paper_data"]
+                if "processed_data" in msg:
+                    message["processedData"] = msg["processed_data"]
+                
+                messages.append(ChatMessage(**message))
+            
+            return messages
+        
+        # Procesar cada sesión
+        for session in sessions_list:
+            session_id = session["_id"]
+            
+            # Debug info
+            print(f"Processing session: {session_id}, title: {session.get('title', 'No title')}")
+            
+            messages = get_messages_for_session(session_id)
+            print(f"Found {len(messages)} messages for session {session_id}")
+            
+            sessions.append(
+                ChatSession(
+                    id=str(session_id),
+                    title=session.get("title", "Untitled"),  # Usar get con valor por defecto
+                    lastUpdated=session.get("last_updated", datetime.utcnow()),  # Usar get con valor por defecto
+                    messages=messages
+                )
+            )
+        
+        print(f"Returning {len(sessions)} sessions for user {user_id_str}")
+        return {"sessions": sessions}
+    
+    except Exception as e:
+        print(f"Error getting chat sessions: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error getting chat sessions: {str(e)}")
+
+@app.get("/api/chat/sessions/{session_id}", response_model=ChatSessionResponse)
+async def get_chat_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Obtiene una sesión de chat específica con todos sus mensajes.
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection not available")
+    
+    user_id = current_user["_id"]
+    
+    try:
+        # Verificar que la sesión pertenezca al usuario
+        session = db[CHAT_SESSIONS_COLLECTION].find_one({ # UPDATED
+            "_id": ObjectId(session_id),
+            "user_id": user_id
+        })
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        
+        # Obtener todos los mensajes de la sesión
+        messages_cursor = db[CHAT_MESSAGES_COLLECTION].find({"session_id": ObjectId(session_id)}).sort("timestamp", 1) # UPDATED
+        messages = []
+        
+        for msg in messages_cursor:
+            message = {
+                "id": str(msg["_id"]),
+                "content": msg["content"],
+                "role": msg["role"],
+                "timestamp": msg["timestamp"]
+            }
+            
+            if "paper_data" in msg:
+                message["paperData"] = msg["paper_data"]
+            if "processed_data" in msg:
+                message["processedData"] = msg["processed_data"]
+            
+            messages.append(ChatMessage(**message))
+        
+        return {
+            "id": session_id,
+            "title": session["title"],
+            "lastUpdated": session["last_updated"],
+            "messages": messages
+        }
+    
+    except Exception as e:
+        print(f"Error getting chat session: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting chat session: {str(e)}")
+
+@app.get("/api/debug/db-status")
+async def get_db_status():
+    """
+    Endpoint de diagnóstico para verificar el estado de la base de datos
+    """
+    if db is None:
+        return {"status": "error", "message": "Database connection not available"}
+    
+    try:
+        # Verificar la conexión a MongoDB
+        client.admin.command('ping')
+        
+        # Obtener información sobre las colecciones
+        collections = db.list_collection_names()
+        collection_info = {}
+        
+        for collection_name in collections:
+            collection_info[collection_name] = db[collection_name].count_documents({})
+            
+            # Para chat_sessions, mostrar información más detallada
+            if collection_name == CHAT_SESSIONS_COLLECTION: # UPDATED
+                # Obtener todos los user_ids únicos
+                user_ids = db[collection_name].distinct("user_id")
+                users_with_sessions = []
+                
+                for uid in user_ids:
+                    session_count = db[collection_name].count_documents({"user_id": uid})
+                    users_with_sessions.append({
+                        "user_id": str(uid),
+                        "session_count": session_count
+                    })
+                
+                collection_info["chat_sessions_by_user"] = users_with_sessions
+                
+                # Mostrar una muestra de sesiones para diagnóstico
+                sample_sessions = list(db[collection_name].find().limit(5))
+                sample_data = []
+                
+                for session in sample_sessions:
+                    sample_data.append({
+                        "id": str(session["_id"]),
+                        "user_id": str(session["user_id"]),
+                        "title": session.get("title", "No title"),
+                        "last_updated": session.get("last_updated", "No date")
+                    })
+                
+                collection_info["chat_sessions_sample"] = sample_data
+        
+        return {
+            "status": "connected",
+            "database": DATABASE_NAME,
+            "collections": collections,
+            "collection_info": collection_info
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error checking database: {str(e)}"
+        }
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

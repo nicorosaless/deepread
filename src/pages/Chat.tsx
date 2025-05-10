@@ -8,6 +8,7 @@ import { useChatSessions } from '@/components/chat/useChatSessions';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Coins } from 'lucide-react';
+import ProcessedPapersDisplay from '@/components/chat/ProcessedPapersDisplay'; // Import the new component
 
 const Chat = () => {
   const {
@@ -19,9 +20,11 @@ const Chat = () => {
     currentPaperData,
     currentProcessedData,
     fileUploadedForCurrentSession,
+    isLoadingSessions,
     handleNewChat,
     handleSessionSelect,
-    handleFileSelected
+    handleFileSelected,
+    handleAddMessage
   } = useChatSessions();
   const { user } = useAuth();
   
@@ -40,6 +43,15 @@ const Chat = () => {
       top: 0,
       behavior: 'smooth'
     });
+  };
+
+  const handleSendMessage = async (message: string) => {
+    // Primero agregamos el mensaje del usuario
+    await handleAddMessage(message, 'user');
+    
+    // Aquí podríamos implementar una respuesta de la IA, pero por ahora solo mostraremos el mensaje del usuario
+    // Si quisiéramos una respuesta automática, podríamos hacer algo como:
+    // await handleAddMessage(`Respuesta a: ${message}`, 'assistant');
   };
 
   return (
@@ -66,17 +78,24 @@ const Chat = () => {
 
           <div className="flex flex-col flex-1 overflow-hidden">
             <div className="flex-1 overflow-y-auto flex flex-col">
-              <ChatHistory 
-                messages={currentSession.messages}
-                isProcessing={isProcessing}
-                processingStage={processingStage}
-                messagesEndRef={messagesEndRef}
-                handleFileSelected={handleFileSelected}
-              />
+              {isLoadingSessions ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-muted-foreground">Cargando conversaciones...</p>
+                </div>
+              ) : (
+                <ChatHistory 
+                  messages={currentSession.messages}
+                  isProcessing={isProcessing}
+                  processingStage={processingStage}
+                  messagesEndRef={messagesEndRef}
+                  handleFileSelected={handleFileSelected}
+                />
+              )}
             </div>
             
             <ChatInput 
               isProcessing={isProcessing}
+              onSendMessage={handleSendMessage}
             />
           </div>
           
@@ -87,6 +106,9 @@ const Chat = () => {
                 scrollToTop={scrollToTop}
               />
           )}
+
+          {/* Display Past Paper Analyses First */}
+          <ProcessedPapersDisplay />
         </SidebarInset>
       </div>
     </SidebarProvider>

@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react'; // Added useEffect
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatSession, ChatMessage, PaperData, ProcessedPaper } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
-import { extractTextFromPDF, processPaperWithLLM } from '@/lib/pdfExtractor';
-import { useAuth } from '@/context/AuthContext'; // Import useAuth
+import { extractTextFromPDF, processPaperWithLLM, saveUserChatSession, getUserChatSessions } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 export function useChatSessions() {
   const { toast } = useToast();
-  const { refreshUserProfile, user } = useAuth(); // Get refreshUserProfile and user from useAuth
+  const { refreshUserProfile, user, isAuthenticated } = useAuth();
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingStage, setProcessingStage] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -22,13 +22,161 @@ export function useChatSessions() {
   const [currentSessionId, setCurrentSessionId] = useState<string>('default');
   const [currentPaperData, setCurrentPaperData] = useState<PaperData | null>(null);
   const [currentProcessedData, setCurrentProcessedData] = useState<ProcessedPaper | null>(null);
+  const [isSavingSession, setIsSavingSession] = useState<boolean>(false);
+  const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(false);
+  
+  // En lugar de usar una ref que persiste entre recargas, usamos un estado
+  const [sessionsAttempted, setSessionsAttempted] = useState<boolean>(false);
+  
+  // Usar un ref para evitar actualizaciones innecesarias del perfil
+  const lastProfileRefresh = useRef<Date | null>(null);
+  // Usar un ref para rastrear la última sesión guardada
+  const lastSavedSession = useRef<{id: string, timestamp: Date} | null>(null);
 
-  // Effect to refresh user profile when currentSessionId changes or user object changes (e.g. after login)
+  // Cargar sesiones de chat del usuario cuando se inicia sesión
   useEffect(() => {
-    if (refreshUserProfile) {
+    console.log("Auth state changed, checking for sessions:", { isAuthenticated, user, sessionsAttempted });
+    
+    const loadUserSessions = async () => {
+      // Solo cargar sesiones si el usuario está autenticado y hay un usuario
+      if (isAuthenticated && user && !sessionsAttempted) {
+        setIsLoadingSessions(true);
+        setSessionsAttempted(true); // Marcar que ya intentamos cargar las sesiones
+        
+        try {
+          console.log("Fetching user chat sessions from API...");
+          console.log("User ID:", user.id);
+          
+          // Intentar acceder al nuevo endpoint de diagnóstico para verificar el estado de la base de datos
+          try {
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+              const debugResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/debug/db-status`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                }
+              });
+              if (debugResponse.ok) {
+                const dbStatus = await debugResponse.json();
+                console.log("Database status:", dbStatus);
+              }
+            }
+          } catch (debugError) {
+            console.error("Error checking database status:", debugError);
+          }
+          
+          const sessions = await getUserChatSessions();
+          console.log(`Fetched ${sessions.length} sessions`);
+          
+          if (sessions && sessions.length > 0) {
+            // Si hay sesiones guardadas, las usamos
+            console.log("Retrieved sessions:", sessions);
+            setChatSessions(sessions);
+            
+            // Seleccionamos la sesión más reciente
+            const mostRecentSession = sessions.sort((a, b) => 
+              new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
+            )[0];
+            
+            setCurrentSessionId(mostRecentSession.id);
+            console.log("Selected session:", mostRecentSession.id);
+            
+            // Actualizamos paper data si está disponible
+            const lastUserMessageWithPaper = mostRecentSession.messages
+              .filter(m => m.role === 'user' && m.paperData)
+              .pop();
+              
+            if (lastUserMessageWithPaper) {
+              setCurrentPaperData(lastUserMessageWithPaper.paperData);
+              setCurrentProcessedData(lastUserMessageWithPaper.processedData || null);
+            }
+          } else {
+            console.log("No sessions found, using default");
+          }
+        } catch (error) {
+          console.error('Error loading chat sessions:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'Failed to load chat history. Please try again later.'
+          });
+        } finally {
+          setIsLoadingSessions(false);
+        }
+      }
+    };
+    
+    loadUserSessions();
+  }, [isAuthenticated, user, toast, sessionsAttempted]); // Añadido sessionsAttempted como dependencia
+
+  // Reiniciar sessionsAttempted cuando se cierra sesión
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setSessionsAttempted(false);
+      // Volver a la sesión default cuando se cierra sesión
+      setChatSessions([{
+        id: 'default',
+        title: 'New Chat',
+        lastUpdated: new Date(),
+        messages: []
+      }]);
+      setCurrentSessionId('default');
+    }
+  }, [isAuthenticated]);
+
+  // Optimizar el refresh del perfil de usuario para que no se llame constantemente
+  const refreshUserProfileOptimized = useCallback(() => {
+    if (!refreshUserProfile) return;
+    
+    const now = new Date();
+    // Solo actualizar si pasaron al menos 30 segundos desde la última actualización
+    if (!lastProfileRefresh.current || now.getTime() - lastProfileRefresh.current.getTime() > 30000) {
+      lastProfileRefresh.current = now;
       refreshUserProfile();
     }
-  }, [currentSessionId, user?.id]); // Added user.id as a dependency
+  }, [refreshUserProfile]);
+
+  // Guardar la sesión actual cuando hay cambios significativos
+  useEffect(() => {
+    const saveCurrentSession = async () => {
+      // Solo guardar si hay un usuario autenticado, no es la sesión default y hay cambios para guardar
+      if (isAuthenticated && user && currentSessionId !== 'default' && currentSessionId !== 'new') {
+        const currentSession = chatSessions.find(s => s.id === currentSessionId);
+        
+        // Solo guardar si hay mensajes en la sesión y no se está guardando actualmente
+        if (currentSession && currentSession.messages.length > 0 && !isSavingSession) {
+          // Verificar si esta sesión ya se guardó recientemente (últimos 5 segundos)
+          const shouldSave = 
+            !lastSavedSession.current || 
+            lastSavedSession.current.id !== currentSessionId ||
+            new Date().getTime() - lastSavedSession.current.timestamp.getTime() > 5000;
+            
+          if (shouldSave) {
+            setIsSavingSession(true);
+            try {
+              await saveUserChatSession(currentSession);
+              lastSavedSession.current = {
+                id: currentSessionId,
+                timestamp: new Date()
+              };
+              console.log(`Saved session ${currentSessionId} successfully`);
+            } catch (error) {
+              console.error('Error saving chat session:', error);
+            } finally {
+              setIsSavingSession(false);
+            }
+          }
+        }
+      }
+    };
+    
+    // Debounce para no guardar en cada pequeño cambio - aumentado a 3 segundos
+    const debounceTimer = setTimeout(() => {
+      saveCurrentSession();
+    }, 3000);
+    
+    return () => clearTimeout(debounceTimer);
+  }, [chatSessions, currentSessionId, isAuthenticated, user, isSavingSession]);
 
   // Get current chat session
   const currentSession = chatSessions.find(session => session.id === currentSessionId) || chatSessions[0];
@@ -38,22 +186,56 @@ export function useChatSessions() {
     message.role === 'user' && message.paperData !== undefined
   );
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     const newSession: ChatSession = {
-      id: uuidv4(),
+      id: 'new', // Cambiado de uuidv4() a 'new' para que el servidor asigne un ID válido
       title: 'New Chat',
       lastUpdated: new Date(),
       messages: []
     };
 
-    setChatSessions([...chatSessions, newSession]);
-    setCurrentSessionId(newSession.id);
+    setChatSessions(prev => [...prev, newSession]);
+    setCurrentSessionId('new'); // Usamos 'new' temporalmente
     setCurrentPaperData(null);
     setCurrentProcessedData(null);
-    // No need to call refreshUserProfile here, useEffect will handle it due to currentSessionId change
+    
+    // Si el usuario está autenticado, guardamos la nueva sesión
+    if (isAuthenticated && user) {
+      try {
+        // Al enviar la sesión al servidor, eliminamos el id para que MongoDB asigne uno nuevo
+        const sessionToSave = {
+          ...newSession
+        };
+        delete sessionToSave.id; // Eliminamos el id para que el servidor lo genere
+        
+        console.log("Creating new session on server...");
+        const savedSession = await saveUserChatSession(sessionToSave);
+        console.log("New session created with ID:", savedSession.id);
+        
+        // Actualizamos el ID con el retornado del servidor
+        setChatSessions(prev => 
+          prev.map(session => 
+            session.id === 'new' ? { ...session, id: savedSession.id } : session
+          )
+        );
+        setCurrentSessionId(savedSession.id);
+        
+        // Actualizar el último guardado
+        lastSavedSession.current = {
+          id: savedSession.id,
+          timestamp: new Date()
+        };
+      } catch (error) {
+        console.error('Error creating new chat session:', error);
+        // En caso de error, volvemos a la sesión default
+        setCurrentSessionId('default');
+      }
+    }
   };
 
   const handleSessionSelect = (sessionId: string) => {
+    if (sessionId === currentSessionId) return; // No hacer nada si ya es la sesión actual
+    
     setCurrentSessionId(sessionId);
     
     // Find the session data
@@ -66,7 +248,9 @@ export function useChatSessions() {
       
     setCurrentPaperData(lastUserMessageWithPaper?.paperData || null);
     setCurrentProcessedData(lastUserMessageWithPaper?.processedData || null);
-    // No need to call refreshUserProfile here, useEffect will handle it due to currentSessionId change
+    
+    // Actualizar el perfil del usuario, pero de forma optimizada
+    refreshUserProfileOptimized();
   };
 
   const handleFileSelected = async (file: File) => {
@@ -123,14 +307,11 @@ export function useChatSessions() {
       // Clear the selected file
       setSelectedFile(null);
 
-      // Refresh user profile to update credits
-      if (refreshUserProfile) {
-        await refreshUserProfile();
-      }
+      // Refresh user profile de forma optimizada
+      refreshUserProfileOptimized();
 
-    } catch (error: any) { // Added type assertion for error
-      console.error('Error processing file:', error); // Log the actual error object
-      // Check if error and error.message exist, then trim and compare
+    } catch (error: any) {
+      console.error('Error processing file:', error);
       if (error && typeof error.message === 'string' && error.message.trim() === 'Insufficient credits') {
         toast({
           variant: 'destructive',
@@ -149,6 +330,30 @@ export function useChatSessions() {
     }
   };
 
+  // Función para agregar mensajes de chat normales
+  const handleAddMessage = async (content: string, role: 'user' | 'assistant') => {
+    const newMessage: ChatMessage = {
+      id: uuidv4(),
+      content,
+      role,
+      timestamp: new Date()
+    };
+
+    // Actualizar la sesión actual con el nuevo mensaje
+    const updatedSessions = chatSessions.map(session => {
+      if (session.id === currentSessionId) {
+        return {
+          ...session,
+          lastUpdated: new Date(),
+          messages: [...session.messages, newMessage]
+        };
+      }
+      return session;
+    });
+
+    setChatSessions(updatedSessions);
+  };
+
   return {
     isProcessing,
     processingStage,
@@ -159,8 +364,10 @@ export function useChatSessions() {
     currentPaperData,
     currentProcessedData,
     fileUploadedForCurrentSession,
+    isLoadingSessions,
     handleNewChat,
     handleSessionSelect,
-    handleFileSelected
+    handleFileSelected,
+    handleAddMessage
   };
 }

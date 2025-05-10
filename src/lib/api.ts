@@ -1,4 +1,4 @@
-import { PaperData, ProcessedPaper, UserData } from "./types";
+import { PaperData, ProcessedPaper, UserData, ChatSession } from "./types";
 import BASE_URL from "./utils";
 
 // Authentication API
@@ -105,6 +105,7 @@ export async function processPaperWithLLM(paperData: PaperData): Promise<Process
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
     },
     body: JSON.stringify(paperData),
   });
@@ -125,5 +126,94 @@ export async function processPaperWithLLM(paperData: PaperData): Promise<Process
     }
   }
   
+  return await response.json();
+}
+
+// Chat API
+export async function saveUserChatSession(session: ChatSession): Promise<ChatSession> {
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${BASE_URL}/api/chat/sessions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ session }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    try {
+      const errorData = JSON.parse(errorText);
+      throw new Error(errorData.detail || 'Failed to save chat session');
+    } catch (parseError) {
+      throw new Error(`Failed to save chat session: ${errorText}`);
+    }
+  }
+
+  return await response.json();
+}
+
+export async function getUserChatSessions(): Promise<ChatSession[]> {
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  console.log('Fetching chat sessions from API...');
+  
+  try {
+    const response = await fetch(`${BASE_URL}/api/chat/sessions`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API error response:', errorText);
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.detail || 'Failed to fetch chat sessions');
+      } catch (parseError) {
+        throw new Error(`Failed to fetch chat sessions: ${errorText}`);
+      }
+    }
+
+    const data = await response.json();
+    console.log('Received sessions data:', data);
+    return data.sessions || [];
+  } catch (error) {
+    console.error('Error fetching chat sessions:', error);
+    throw error;
+  }
+}
+
+export async function getUserChatSession(sessionId: string): Promise<ChatSession> {
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${BASE_URL}/api/chat/sessions/${sessionId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    try {
+      const errorData = JSON.parse(errorText);
+      throw new Error(errorData.detail || 'Failed to fetch chat session');
+    } catch (parseError) {
+      throw new Error(`Failed to fetch chat session: ${errorText}`);
+    }
+  }
+
   return await response.json();
 }

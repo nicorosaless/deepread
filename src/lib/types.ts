@@ -32,21 +32,37 @@ export interface UserData {
   credits: number; // Added credits field
 }
 
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  credits: number;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+  processed_paper_messages?: ChatMessage[]; // Optional: messages from paper processing
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
-  user: UserData | null;
+  user: User | null;
   token: string | null;
   loading: boolean;
+  processedPaperMessages: ChatMessage[]; // Ensure this is always present
 }
 
 // Chat types
 export interface ChatMessage {
   id: string;
-  content: string;
+  content: any; // Can be string (summary) or object (code suggestion)
   role: "user" | "assistant";
   paperData?: PaperData | null;
   processedData?: ProcessedPaper | null;
   timestamp: Date;
+  content_type?: 'summary' | 'code_suggestion' | 'user_message' | string; // Added to distinguish message types
 }
 
 export interface ChatSession {
@@ -56,14 +72,13 @@ export interface ChatSession {
   messages: ChatMessage[];
 }
 
-export interface AuthContextType {
-  isAuthenticated: boolean;
-  user: UserData | null;
-  login: (email: string, password: string) => Promise<void>;
+export interface AuthContextType extends AuthState {
+  login: (token: string) => Promise<void>; // Changed to accept only token
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  loading: boolean;
   error: string | null;
-  updateUserCredits: (newCredits: number) => void; // Added updateUserCredits
-  refreshUserProfile?: () => Promise<void>; // Added refreshUserProfile
+  updateUserCredits: (newCredits: number) => void;
+  refreshUserProfile: () => Promise<void>;
+  setProcessedPaperMessages: (messages: ChatMessage[]) => void; // Function to update messages
+  processedPaperMessages: ChatMessage[]; // Add processedPaperMessages to the context type
 }

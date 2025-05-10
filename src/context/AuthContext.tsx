@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import { getUserProfile, loginUser, registerUser } from '@/lib/api';
-import { UserData, AuthState, AuthContextType } from '@/lib/types';
+import { UserData, AuthState, AuthContextType, ChatMessage } from '@/lib/types'; // Import ChatMessage
 import { useToast } from '@/hooks/use-toast';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -12,10 +12,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user: null,
     token: null,
     loading: true,
+    processedPaperMessages: [], // Added to store processed paper messages
   });
   const [error, setError] = useState<string | null>(null);
+  
+  // Referencia para rastrear la última vez que se actualizó el perfil
+  const lastProfileUpdate = useRef<Date | null>(null);
+  // Flag para evitar múltiples solicitudes de perfil simultáneas
+  const isRefreshing = useRef(false);
 
   const fetchUserProfile = async (token: string) => {
+    // Si ya hay una solicitud en curso, no hacer nada
+    if (isRefreshing.current) {
+      return authState.user;
+    }
+    
+    isRefreshing.current = true;
+    
     try {
       const user = await getUserProfile(token);
       setAuthState({
@@ -23,7 +36,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         token,
         loading: false,
+        processedPaperMessages: authState.processedPaperMessages, // Preserve messages on profile fetch
       });
+      lastProfileUpdate.current = new Date();
+      isRefreshing.current = false;
       return user; // Return user data
     } catch (error) {
       console.error('Failed to fetch user profile:', error);
@@ -33,12 +49,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user: null,
         token: null,
         loading: false,
+        processedPaperMessages: [], // Clear messages on error
       });
       toast({
         title: "Authentication error",
         description: "Failed to retrieve your profile. Please try logging in again.",
         variant: "destructive",
       });
+      isRefreshing.current = false;
       throw error; // Re-throw error
     }
   };
@@ -46,10 +64,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       const token = localStorage.getItem('auth_token');
+      const processedMessagesString = localStorage.getItem('processedPaperMessages'); // Load messages from localStorage
+
       if (token) {
+        const processedPaperMessages = processedMessagesString ? JSON.parse(processedMessagesString) : [];
         await fetchUserProfile(token).catch(() => {
           // Error handling is done within fetchUserProfile
         });
+        setAuthState(prevState => ({ ...prevState, processedPaperMessages }));
       } else {
         setAuthState(prevState => ({ ...prevState, loading: false }));
       }
@@ -67,6 +89,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         description: `Welcome back, ${user.name}!`,
       });
     }
+    const processedMessagesString = localStorage.getItem('processedPaperMessages');
+    const processedPaperMessages = processedMessagesString ? JSON.parse(processedMessagesString) : [];
+    setAuthState(prevState => ({ ...prevState, processedPaperMessages }));
   };
 
   const register = async (name: string, email: string, password: string): Promise<void> => {
@@ -85,11 +110,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('processedPaperMessages'); // Clear messages on logout
     setAuthState({
       isAuthenticated: false,
       user: null,
       token: null,
       loading: false,
+      processedPaperMessages: [], // Clear messages on logout
     });
     toast({
       title: "Logged out",
@@ -106,17 +133,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Function to explicitly refresh user profile
-  const refreshUserProfile = async () => {
+  // Function to explicitly refresh user profile, optimizado para limitar frecuencia
+  const refreshUserProfile = useCallback(async () => {
     const token = localStorage.getItem('auth_token');
-    if (token) {
-      try {
-        await fetchUserProfile(token);
-      } catch (error) {
-        // Error is handled in fetchUserProfile
-        console.error("Error refreshing user profile from refreshUserProfile", error);
-      }
+    if (!token) return;
+    
+    // Si ya hay una solicitud en curso, no hacer nada
+    if (isRefreshing.current) return;
+    
+    // Limitar actualizaciones a una vez cada 30 segundos como máximo
+    const now = new Date();
+    if (lastProfileUpdate.current && now.getTime() - lastProfileUpdate.current.getTime() < 30000) {
+      return; // Si ha pasado menos de 30 segundos desde la última actualización, no hacer nada
     }
+    
+    try {
+      await fetchUserProfile(token);
+    } catch (error) {
+      // Error is handled in fetchUserProfile
+      console.error("Error refreshing user profile from refreshUserProfile", error);
+    }
+  }, []);
+
+  // New function to allow updating messages, e.g., after a new paper processing
+  const setProcessedPaperMessages = (messages: ChatMessage[]) => {
+    localStorage.setItem('processedPaperMessages', JSON.stringify(messages));
+    setAuthState(prevState => ({ ...prevState, processedPaperMessages: messages }));
   };
 
   return (
@@ -128,7 +170,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         error,
         updateUserCredits,
-        refreshUserProfile // Expose refreshUserProfile
+        refreshUserProfile,
+        setProcessedPaperMessages, // Add to context
       }}
     >
       {children}
