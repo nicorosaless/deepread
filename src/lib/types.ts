@@ -1,4 +1,3 @@
-
 export interface PaperData {
   title: string;
   content: string;
@@ -106,4 +105,5 @@ export interface ArxivSearchParams {
   maxResults: number;
   start: number;
   categories?: string[];
+  timeframe?: 'all' | 'last_week' | 'last_month' | 'last_year';
 }

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,123 +10,192 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import {
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-} from '@/components/ui/sidebar';
-import { Search } from 'lucide-react';
+import { Search, RefreshCw, AlertCircle } from 'lucide-react';
 import { useArxivSearch } from '@/components/arxiv/useArxivSearch';
 import ArxivPaperList from '@/components/arxiv/ArxivPaperList';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { getArxivAICategories, getTimeframeOptions } from '@/lib/arxivApi';
 
 const ArxivSearch: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'relevance' | 'lastUpdatedDate' | 'submittedDate'>('lastUpdatedDate');
-  const [sortOrder, setSortOrder] = useState<'ascending' | 'descending'>('descending');
+  // Mantener estas variables con valores predeterminados
+  const sortBy = 'lastUpdatedDate';
+  const sortOrder = 'descending';
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('all');
+  
+  // Obtener las categorías y opciones de timeframe
+  const categories = getArxivAICategories();
+  const timeframeOptions = getTimeframeOptions();
   
   const { 
     papers, 
     loading, 
-    error, 
+    error,
     totalResults,
     currentPage,
     maxResults,
+    lastSearchQuery,
     searchPapers,
+    retrySearch,
     goToNextPage,
     goToPreviousPage
   } = useArxivSearch();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Crear array de categorías seleccionadas - solo incluir categorías reales, no 'all'
+    const categoriesArray = selectedCategory !== 'all' ? [selectedCategory] : [];
+    
+    // Preparar el timeframe - asegurémonos que sea un valor válido
+    const timeframe = ['all', 'last_week', 'last_month', 'last_year'].includes(selectedTimeframe) 
+      ? selectedTimeframe as 'all' | 'last_week' | 'last_month' | 'last_year'
+      : 'all';
+    
     searchPapers({
       query: searchQuery,
       sortBy,
       sortOrder,
       maxResults: 10,
-      start: 0
+      start: 0,
+      categories: categoriesArray,
+      timeframe: timeframe
     });
   };
 
-  return (
-    <>
-      <SidebarGroup>
-        <SidebarGroupLabel>arXiv AI Papers Search</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <form onSubmit={handleSearch} className="space-y-3">
-            <div>
-              <Label htmlFor="search-query" className="sr-only">Search</Label>
-              <div className="relative">
-                <Input
-                  id="search-query"
-                  placeholder="Search AI papers..."
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-sidebar-foreground/50" />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label htmlFor="sort-by" className="text-xs">Sort By</Label>
-                <Select
-                  value={sortBy}
-                  onValueChange={(value) => setSortBy(value as any)}
-                >
-                  <SelectTrigger id="sort-by" className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="relevance">Relevance</SelectItem>
-                      <SelectItem value="lastUpdatedDate">Last Updated</SelectItem>
-                      <SelectItem value="submittedDate">Submitted Date</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="sort-order" className="text-xs">Order</Label>
-                <Select
-                  value={sortOrder}
-                  onValueChange={(value) => setSortOrder(value as any)}
-                >
-                  <SelectTrigger id="sort-order" className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="descending">Newest First</SelectItem>
-                      <SelectItem value="ascending">Oldest First</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <Button type="submit" variant="outline" size="sm" className="w-full" disabled={loading}>
-              {loading ? "Searching..." : "Search Papers"}
-            </Button>
-          </form>
+  const handleRetry = () => {
+    retrySearch();
+  };
 
-          {error && <p className="text-xs text-destructive mt-2">{error}</p>}
-          
-          {papers.length > 0 && (
-            <ArxivPaperList 
-              papers={papers}
-              totalResults={totalResults}
-              currentPage={currentPage}
-              maxResults={maxResults}
-              loading={loading}
-              onNextPage={goToNextPage}
-              onPreviousPage={goToPreviousPage}
+  return (
+    <div className="space-y-6">
+      <form onSubmit={handleSearch} className="space-y-4 p-4 border rounded-lg shadow-sm bg-card">
+        <div>
+          <Label htmlFor="search-query" className="text-base font-medium">Buscar en ArXiv</Label>
+          <div className="relative mt-1">
+            <Input
+              id="search-query"
+              placeholder="Buscar papers de IA (ej: transformers, diffusion models)..."
+              className="pl-10 pr-4 py-2 text-base"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          </div>
+        </div>
+        
+        {/* Filtros adicionales - Solo Categoría y Período */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="category" className="text-sm font-medium">Categoría</Label>
+            <Select
+              value={selectedCategory}
+              onValueChange={setSelectedCategory}
+            >
+              <SelectTrigger id="category" className="h-10 text-sm mt-1">
+                <SelectValue placeholder="Todas las categorías" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">Todas las categorías</SelectItem>
+                  {categories.map(category => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label htmlFor="timeframe" className="text-sm font-medium">Período</Label>
+            <Select
+              value={selectedTimeframe}
+              onValueChange={setSelectedTimeframe}
+            >
+              <SelectTrigger id="timeframe" className="h-10 text-sm mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {timeframeOptions.map(option => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        <Button type="submit" size="lg" className="w-full text-base flex items-center gap-2 justify-center" disabled={loading}>
+          {loading ? (
+            <>
+              <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
+              <span>Buscando...</span>
+            </>
+          ) : (
+            <>
+              <Search className="h-4 w-4" />
+              <span>Buscar Papers</span>
+            </>
           )}
-        </SidebarGroupContent>
-      </SidebarGroup>
-    </>
+        </Button>
+      </form>
+
+      {loading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      )}
+
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error en la búsqueda</AlertTitle>
+          <AlertDescription className="mb-2">{error}</AlertDescription>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-2 flex items-center" 
+            onClick={handleRetry}
+            disabled={loading}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Reintentar búsqueda
+          </Button>
+        </Alert>
+      )}
+      
+      {papers.length > 0 && !error && !loading && (
+        <ArxivPaperList 
+          papers={papers}
+          totalResults={totalResults}
+          currentPage={currentPage}
+          maxResults={maxResults}
+          loading={loading}
+          onNextPage={goToNextPage}
+          onPreviousPage={goToPreviousPage}
+        />
+      )}
+
+      {papers.length === 0 && !error && lastSearchQuery && !loading && (
+        <div className="text-center p-8 border rounded-lg bg-card mt-4">
+          <p className="text-muted-foreground">No se encontraron resultados para "<span className="font-medium">{lastSearchQuery}</span>"</p>
+          <p className="text-sm text-muted-foreground mt-2">Intenta con otros términos de búsqueda</p>
+        </div>
+      )}
+
+      {!papers.length && !error && !lastSearchQuery && !loading && (
+        <div className="text-center p-8 border rounded-lg bg-muted/30 mt-4">
+          <p className="font-medium">Ingresa un término de búsqueda para encontrar papers científicos</p>
+          <p className="text-sm text-muted-foreground mt-2">Busca por temas como "transformers", "deep learning", etc.</p>
+        </div>
+      )}
+    </div>
   );
 };
 

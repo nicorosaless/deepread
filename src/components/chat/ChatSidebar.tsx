@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { ChatSession } from '@/lib/types';
@@ -15,7 +14,6 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { LogOut, Plus } from 'lucide-react';
-import ArxivSearch from '@/components/arxiv/ArxivSearch';
 
 interface ChatSidebarProps {
   chatSessions: ChatSession[];
@@ -89,8 +87,6 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         
         <SidebarSeparator />
         
-        {/* ArXiv Search Component */}
-        <ArxivSearch />
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
         <div className="flex flex-col space-y-3">

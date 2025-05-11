@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Chat from "./pages/Chat";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ArxivSearchPage from "./pages/ArxivSearchPage"; // Import the new ArxivSearchPage
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Chat />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/arxiv-search" // Add route for ArxivSearchPage
+              element={
+                <ProtectedRoute>
+                  <ArxivSearchPage />
                 </ProtectedRoute>
               } 
             />
