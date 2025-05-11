@@ -1,3 +1,4 @@
+
 export interface PaperData {
   title: string;
   content: string;
@@ -81,4 +82,28 @@ export interface AuthContextType extends AuthState {
   refreshUserProfile: () => Promise<void>;
   setProcessedPaperMessages: (messages: ChatMessage[]) => void; // Function to update messages
   processedPaperMessages: ChatMessage[]; // Add processedPaperMessages to the context type
+}
+
+// ArXiv Paper types
+export interface ArxivPaper {
+  id: string;
+  title: string;
+  authors: string[];
+  summary: string;
+  published: Date;
+  updated: Date;
+  categories: string[];
+  doi?: string;
+  journalReference?: string;
+  pdfUrl: string;
+  htmlUrl: string;
+}
+
+export interface ArxivSearchParams {
+  query: string;
+  sortBy: 'relevance' | 'lastUpdatedDate' | 'submittedDate';
+  sortOrder: 'ascending' | 'descending';
+  maxResults: number;
+  start: number;
+  categories?: string[];
 }
