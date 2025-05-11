@@ -34,7 +34,7 @@ const Register = () => {
       const response = await registerUser(name, email, password);
       
       // Pass only the token to the login function
-      await login(response.access_token);
+      await login(response.token);
       
       navigate('/chat');
       toast({

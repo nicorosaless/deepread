@@ -11,7 +11,7 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Card, CardContent } from '@/components/ui/card';
-import { ExternalLink, FilePdf } from 'lucide-react';
+import { ExternalLink, File } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ArxivPaperListProps {
@@ -90,7 +90,7 @@ const ArxivPaperList: React.FC<ArxivPaperListProps> = ({
                       size="sm" 
                       className="w-full h-7 text-[10px]"
                     >
-                      <FilePdf className="h-3 w-3 mr-1" />
+                      <File className="h-3 w-3 mr-1" />
                       PDF
                     </Button>
                   </a>
@@ -107,14 +107,14 @@ const ArxivPaperList: React.FC<ArxivPaperListProps> = ({
             <PaginationPrevious 
               onClick={onPreviousPage}
               className={`h-7 text-xs ${currentPage === 0 ? 'pointer-events-none opacity-50' : ''}`}
-              disabled={currentPage === 0 || loading}
+              aria-disabled={currentPage === 0 || loading}
             />
           </PaginationItem>
           <PaginationItem>
             <PaginationNext 
               onClick={onNextPage}
               className={`h-7 text-xs ${(currentPage + 1) * maxResults >= totalResults ? 'pointer-events-none opacity-50' : ''}`}
-              disabled={(currentPage + 1) * maxResults >= totalResults || loading}
+              aria-disabled={(currentPage + 1) * maxResults >= totalResults || loading}
             />
           </PaginationItem>
         </PaginationContent>
