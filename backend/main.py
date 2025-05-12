@@ -99,25 +99,38 @@ class ChatMessage(BaseModel):
 # Database connection setup
 client = None
 db = None
+MAX_DB_CONNECT_RETRIES = 3
 
 @app.on_event("startup")
 async def startup_db_client():
     global client, db
-    try:
-        # Usar pymongo en lugar de motor
-        client = MongoClient(MONGODB_URL)
-        db = client[DATABASE_NAME]
-        
-        # Verificar la conexión
-        client.admin.command('ping')
-        
-        # Crear índice para el email único
-        db[USERS_COLLECTION].create_index("email", unique=True)
-        print("MongoDB connection established")
-    except Exception as e:
-        print(f"Failed to connect to MongoDB: {e}")
-        client = None
-        db = None
+    connect_retries = 0
+    
+    while connect_retries < MAX_DB_CONNECT_RETRIES:
+        try:
+            # Usar pymongo en lugar de motor
+            print(f"Attempting to connect to MongoDB: {MONGODB_URL}")
+            client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
+            
+            # Verificar la conexión
+            client.admin.command('ping')
+            db = client[DATABASE_NAME]
+            
+            # Crear índice para el email único
+            db[USERS_COLLECTION].create_index("email", unique=True)
+            print("MongoDB connection established successfully")
+            break
+        except Exception as e:
+            connect_retries += 1
+            print(f"Failed to connect to MongoDB (attempt {connect_retries}/{MAX_DB_CONNECT_RETRIES}): {e}")
+            if connect_retries >= MAX_DB_CONNECT_RETRIES:
+                print("Max connection attempts reached. Database might be unavailable.")
+                client = None
+                db = None
+            else:
+                # Wait before retrying
+                import time
+                time.sleep(2)  # Wait 2 seconds before retry
     
     if has_groq and GROQ_API_KEY: # Keep Groq for now as a potential fallback or for other uses
         try:
