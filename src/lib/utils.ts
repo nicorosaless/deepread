@@ -21,7 +21,9 @@ function determineBaseUrl() {
 const BASE_URL = determineBaseUrl();
 
 export async function apiFetch(endpoint: string, options?: RequestInit) {
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  // Usar el constructor URL para unir BASE_URL y endpoint de forma segura
+  const finalUrl = new URL(endpoint, BASE_URL).href;
+  const response = await fetch(finalUrl, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -30,10 +32,39 @@ export async function apiFetch(endpoint: string, options?: RequestInit) {
   });
 
   if (!response.ok) {
+    // Intenta parsear el cuerpo del error si es JSON
+    let errorBody = '';
+    try {
+      errorBody = await response.text(); // Leer como texto primero
+      const jsonError = JSON.parse(errorBody); // Intentar parsear como JSON
+      if (jsonError && jsonError.detail) {
+        throw new Error(`API fetch failed: ${response.status} ${response.statusText} - ${jsonError.detail}`);
+      }
+    } catch (e) {
+      // Si no es JSON o falla el parseo, usa el texto del cuerpo si existe, o solo statusText
+      const message = errorBody ? `${response.statusText} - ${errorBody}` : response.statusText;
+      throw new Error(`API fetch failed: ${response.status} ${message}`);
+    }
+    // Fallback si no se pudo obtener más detalle
     throw new Error(`API fetch failed: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  // Manejar respuestas vacías o no JSON
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.indexOf("application/json") !== -1) {
+    return response.json();
+  } else {
+    // Si no es JSON, puedes devolver el texto o manejarlo como prefieras
+    // Por ahora, si no es JSON pero la respuesta es ok, devolvemos null o un objeto vacío
+    // o podrías lanzar un error si siempre esperas JSON.
+    // Si la respuesta puede ser vacía (ej. 204 No Content), esto es importante.
+    if (response.status === 204) return null;
+    return response.text().then(text => {
+        // Si el texto está vacío, devuelve null o un objeto vacío.
+        // Si no, podrías lanzar un error o devolver el texto.
+        return text ? { data: text } : null;
+    });
+  }
 }
 
 export default BASE_URL;
