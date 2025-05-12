@@ -24,7 +24,15 @@ import google.generativeai as genai # Added Google AI import
 # This is a defensive measure against the NameError
 text = ""
 
+# Cargar variables de entorno
 load_dotenv()
+
+MONGODB_URI = os.getenv("MONGODB_URI")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# Asegúrate de que las variables estén configuradas
+if not MONGODB_URI or not GOOGLE_API_KEY:
+    raise ValueError("Missing required environment variables: MONGODB_URI or GOOGLE_API_KEY")
 
 # Configuración para poder usar ambos clientes de IA según disponibilidad
 
@@ -49,7 +57,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:8080",  # Frontend dev server
-        "http://127.0.0.1:8080"   # IPv4 localhost alternative
+        "http://127.0.0.1:8080",   # IPv4 localhost alternative
+        "https://deepread.vercel.app"  # Production domain
     ],
     allow_credentials=True,
     allow_methods=["*"],

@@ -11,3 +11,7 @@ pydantic==2.6.4
 python-dotenv==1.0.0
 tiktoken==0.7.0 # Added for token counting
 google-generativeai==0.5.4 # Added for Google AI Studio
+
+# Added runtime configuration for Vercel
+vercel
+flask
