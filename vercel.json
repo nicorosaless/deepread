@@ -19,7 +19,14 @@
       "dest": "backend/main.py"
     },
     {
-      "src": "(.*)",
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*\\.(js|css|svg|png|jpg|jpeg|gif|ico|json|woff|woff2|ttf|eot)$)",
+      "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
       "dest": "/index.html"
     }
   ]
