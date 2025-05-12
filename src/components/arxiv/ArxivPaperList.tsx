@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ArxivPaper } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -11,7 +10,7 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Card, CardContent } from '@/components/ui/card';
-import { ExternalLink, File } from 'lucide-react';
+import { ExternalLink, File, BrainCircuit } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ArxivPaperListProps {
@@ -22,6 +21,7 @@ interface ArxivPaperListProps {
   loading: boolean;
   onNextPage: () => void;
   onPreviousPage: () => void;
+  onDeepReadPaper: (paper: ArxivPaper) => void;
 }
 
 const ArxivPaperList: React.FC<ArxivPaperListProps> = ({
@@ -31,7 +31,8 @@ const ArxivPaperList: React.FC<ArxivPaperListProps> = ({
   maxResults,
   loading,
   onNextPage,
-  onPreviousPage
+  onPreviousPage,
+  onDeepReadPaper,
 }) => {
   if (papers.length === 0) {
     return null;
@@ -62,7 +63,7 @@ const ArxivPaperList: React.FC<ArxivPaperListProps> = ({
                   {formatDistanceToNow(paper.updated, { addSuffix: true })}
                 </p>
                 
-                <div className="flex gap-2 mt-2">
+                <div className="grid grid-cols-3 gap-2 mt-2">
                   <a 
                     href={paper.htmlUrl}
                     target="_blank"
@@ -73,9 +74,10 @@ const ArxivPaperList: React.FC<ArxivPaperListProps> = ({
                       variant="outline" 
                       size="sm" 
                       className="w-full h-7 text-[10px]"
+                      title={paper.htmlUrl}
                     >
-                      <ExternalLink className="h-3 w-3 mr-1" />
-                      arXiv
+                      <ExternalLink className="h-3 w-3 mr-1 flex-shrink-0" />
+                      <span className="truncate">arXiv</span>
                     </Button>
                   </a>
                   
@@ -89,11 +91,23 @@ const ArxivPaperList: React.FC<ArxivPaperListProps> = ({
                       variant="outline" 
                       size="sm" 
                       className="w-full h-7 text-[10px]"
+                      title={paper.pdfUrl}
                     >
-                      <File className="h-3 w-3 mr-1" />
-                      PDF
+                      <File className="h-3 w-3 mr-1 flex-shrink-0" />
+                      <span className="truncate">PDF</span>
                     </Button>
                   </a>
+
+                  <Button 
+                    variant="default"
+                    size="sm" 
+                    className="w-full h-7 text-[10px]"
+                    onClick={() => onDeepReadPaper(paper)}
+                    title={`DeepRead: ${paper.title}`}
+                  >
+                    <BrainCircuit className="h-3 w-3 mr-1 flex-shrink-0" />
+                    <span className="truncate">DeepRead it</span>
+                  </Button>
                 </div>
               </CardContent>
             </Card>

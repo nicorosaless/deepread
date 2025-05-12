@@ -20,6 +20,10 @@ import math
 import tiktoken
 import google.generativeai as genai # Added Google AI import
 
+# Add a global 'text' variable with a default value
+# This is a defensive measure against the NameError
+text = ""
+
 load_dotenv()
 
 # Configuración para poder usar ambos clientes de IA según disponibilidad
@@ -58,6 +62,7 @@ DATABASE_NAME = "DeepRead"
 USERS_COLLECTION = "users"
 CHAT_SESSIONS_COLLECTION = "chat_sessions" # ADDED
 CHAT_MESSAGES_COLLECTION = "chat_messages" # ADDED
+CREDIT_LOGS_COLLECTION = "credit_logs" # ADDED to define the collection name
 
 # API Keys
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -70,7 +75,7 @@ JWT_EXPIRATION_DELTA = timedelta(days=7)
 
 # Models
 # SUMMARY_MODEL and CODE_MODEL are no longer needed as we'll use Google's model directly
-GOOGLE_MODEL_NAME = "gemini-2.0-flash"
+GOOGLE_MODEL_NAME = "gemini-2.0-flash" # Changed from 2.0-flash to 1.5-flash
 
 # Nuevos modelos para la funcionalidad de chat (MOVED UP)
 class ChatMessage(BaseModel):
@@ -177,9 +182,6 @@ class ChatSessionsResponse(BaseModel):
 class PaperData(BaseModel):
     title: str
     content: str
-    authors: Optional[List[str]] = None
-    abstract: Optional[str] = None
-    date: Optional[str] = None
 
 class CodeFile(BaseModel):
     filename: str
@@ -194,6 +196,7 @@ class ProjectSuggestion(BaseModel):
 class ProcessedPaper(BaseModel):
     summary: str
     projectSuggestions: List[ProjectSuggestion]
+    credits_remaining: Optional[int] = None # Added credits_remaining
 
 # Authentication utilities
 def create_access_token(data: dict):
@@ -340,35 +343,47 @@ async def extract_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="File must be a PDF")
     
     try:
-        # Read the uploaded file
         contents = await file.read()
-        
-        # Use PyPDF2 to extract text
         pdf_reader = PyPDF2.PdfReader(BytesIO(contents))
+        extracted_text = ""  # Definir variable para texto extraído
+        for page_num, page in enumerate(pdf_reader.pages):
+            page_text = page.extract_text()
+            if page_text:
+                extracted_text += page_text + "\n"
         
-        # Extract text from all pages
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text() + "\n"
-        
-        # Title is the filename without .pdf
         title = file.filename.replace(".pdf", "")
+        authors = None
+        abstract = None
         
+        # Attempt to extract abstract and authors from the first few pages
+        # This is a basic heuristic and might need refinement
+        for i in range(min(2, len(pdf_reader.pages))): # Check first 2 pages
+            page_text_for_meta = pdf_reader.pages[i].extract_text()
+            if page_text_for_meta:
+                if not abstract:
+                    # Regex for abstract: case-insensitive, looks for "Abstract" followed by content until next common section or double newline
+                    abstract_match = re.search(r"(?i)(?:Abstract|Summary)(?:[:.\s\n]|$)(.*?)(?:\n\n|Keywords|Introduction|1\.\s|I\.\s|Motivation|Background|Related Work|$)", page_text_for_meta, re.DOTALL)
+                    if abstract_match:
+                        abstract_candidate = abstract_match.group(1).strip()
+                        # Further clean common non-abstract text if it starts with it
+                        abstract_candidate = re.sub(r"^(?:[\d.]*\s*)?(?:Introduction|Motivation|Background|Related Work)\s*", "", abstract_candidate, flags=re.IGNORECASE).strip()
+                        if len(abstract_candidate) > 50: # Basic check for meaningful abstract
+                            abstract = abstract_candidate[:4000] # Increased limit for abstract
+
         paper_data = PaperData(
             title=title,
-            content=text[:16000],  # Limit content length for processing
-            authors=None, # Simplified: No author extraction
-            abstract=None, # Simplified: No abstract extraction
-            date=None # Simplified: No date extraction
+            content=extracted_text[:300000]  # Usar la variable extraída, con límite aumentado
         )
-        
         return paper_data
         
     except Exception as e:
+        print(f"Error in extract_pdf: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
 
 # Credit cost constants
-TOKEN_TO_CREDIT_RATIO = 10000  # Example: 10000 tokens = 1 credit, adjust as needed
+TOKEN_TO_CREDIT_RATIO = 1000  # Example: 1000 tokens = 1 credit, adjust as needed
 SUMMARY_COST_PER_TOKEN = 1 / TOKEN_TO_CREDIT_RATIO 
 CODE_GEN_COST_PER_TOKEN = 2 / TOKEN_TO_CREDIT_RATIO # Example: Code generation is twice as expensive
 
@@ -402,127 +417,123 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
     user_credits = current_user.get("credits", 0)
     session_id = ObjectId() # Generate a unique session ID for this interaction
 
-    # --- Pre-computation of Estimated Cost ---
-    # 1. Estimate for Summary
-    pre_summary_prompt = f""" \n    You are an academic research assistant. Your task is to analyze this research paper and provide a clear, concise summary (250-300 words).
-
-    Here is the paper:
-    Title: {paper_data.title}
-    Content:
-    {paper_data.content}
-    
-    Provide only the summary, without any additional formatting or section titles like "Summary:".
-    """ # Note: This is a simplified prompt for token counting, actual prompt below might be slightly different
-    estimated_summary_input_tokens = count_tokens(pre_summary_prompt)
-    estimated_summary_cost = (estimated_summary_input_tokens + ESTIMATED_SUMMARY_OUTPUT_TOKENS) * SUMMARY_COST_PER_TOKEN
-
-    # 2. Estimate for Code Generation (input depends on estimated summary)
-    # For code gen input, we use the pre_summary_prompt tokens + estimated summary output tokens as a proxy
-    # This is a rough estimate as the actual summary isn't generated yet.
-    estimated_code_input_tokens = count_tokens(f"Title: {paper_data.title} Summary: [estimated {ESTIMATED_SUMMARY_OUTPUT_TOKENS} tokens summary]") + ESTIMATED_SUMMARY_OUTPUT_TOKENS
-    estimated_code_gen_cost = (estimated_code_input_tokens + ESTIMATED_CODE_OUTPUT_TOKENS) * CODE_GEN_COST_PER_TOKEN
-    
-    estimated_total_cost = estimated_summary_cost + estimated_code_gen_cost
-    integer_estimated_total_cost = math.ceil(estimated_total_cost)
-
-    if user_credits < integer_estimated_total_cost:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Insufficient credits for estimated cost. Required: ~{integer_estimated_total_cost}, Available: {user_credits}. Please top up your credits."
-        )
-    # --- End of Pre-computation ---
-
     try:
+        # --- Pre-computation of Estimated Cost ---
+        paper_context_for_prompt = f"Title: {paper_data.title}\n"
+        content_for_estimation = paper_data.content[:20000] if paper_data.content else ""
+        paper_context_for_prompt += f"Content (excerpt):\n{content_for_estimation}..."
+
+        pre_summary_prompt_for_estimation = f"""
+        Analyze this research paper excerpt and provide a summary.
+        Paper Context:
+        {paper_context_for_prompt}
+        Summary (250-300 words):
+        """
+        estimated_summary_input_tokens = count_tokens(pre_summary_prompt_for_estimation)
+        estimated_summary_cost = (estimated_summary_input_tokens + ESTIMATED_SUMMARY_OUTPUT_TOKENS) * SUMMARY_COST_PER_TOKEN
+
+        estimated_code_input_base_for_estimation = f"Title: {paper_data.title}\n"
+        estimated_code_input_base_for_estimation += f"Summary: [estimated {ESTIMATED_SUMMARY_OUTPUT_TOKENS} tokens summary]"
+        
+        estimated_code_input_tokens = count_tokens(estimated_code_input_base_for_estimation) + ESTIMATED_SUMMARY_OUTPUT_TOKENS
+        estimated_code_gen_cost = (estimated_code_input_tokens + ESTIMATED_CODE_OUTPUT_TOKENS) * CODE_GEN_COST_PER_TOKEN
+        
+        estimated_total_cost = estimated_summary_cost + estimated_code_gen_cost
+        integer_estimated_total_cost = math.ceil(estimated_total_cost)
+
+        if user_credits < integer_estimated_total_cost:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient credits. Required: ~{integer_estimated_total_cost}, Available: {user_credits}."
+            )
+        # --- End of Pre-computation ---
+
         ai_info = get_ai_client()
         ai_client = ai_info["client"]
-        client_type = ai_info["type"] # Will be "google" if successful
+        client_type = ai_info["type"]
         
-        # max_summary_tokens and max_code_tokens are now for Google's API
-        # For Google, this is max_output_tokens in generation_config
+        # Define label variable here to ensure it's available in scope
+        label = "ArxivPaper"  # Default label for the paper
+        
         generation_config_summary = genai.types.GenerationConfig(
-            max_output_tokens=600,
-            temperature=0.2,
-            top_p=0.2 # Google uses top_p, not top_k in the same way as some others for this param
+            max_output_tokens=1024, # Increased for 300-500 words summary
+            temperature=0.3
         )
         generation_config_code = genai.types.GenerationConfig(
             max_output_tokens=60000, 
-            temperature=0.6,
-            top_p=0.1
+            temperature=0.5
         )
 
         # 1. Generate summary
+        # Full content for actual prompt
+        summary_prompt_full_context = f"Title: {paper_data.title}\n"
+        summary_prompt_full_context += f"Full Content:\n{paper_data.content}" # Use full content here
+
         summary_prompt = f"""
-        You are an academic research assistant. Your task is to analyze this research paper and provide a clear, concise summary (250-300 words).
+        You are an expert academic research assistant. Your task is to meticulously analyze the provided research paper and generate a comprehensive, clear, and concise summary. 
+        The summary should be between 300-500 words and accurately reflect the paper's core arguments, methodology, key findings, and main conclusions. 
+        Ensure you capture the essence and significant contributions of the paper. Focus on extracting actionable insights and technical details relevant for understanding and potentially implementing concepts from the paper.
 
         Here is the paper:
-        Title: {paper_data.title}
-        Content:
-        {paper_data.content}
+        {summary_prompt_full_context}
         
-        Provide only the summary, without any additional formatting or section titles like "Summary:".
+        Provide only the summary itself, without any additional conversational text, formatting, or section titles like "Summary:".
         """
         
-        actual_summary_input_tokens = count_tokens(summary_prompt) # Stays tiktoken for now
+        actual_summary_input_tokens = count_tokens(summary_prompt)
         summary_text = ""
 
-        if client_type == "google":
-            try:
+        try:
+            if client_type == "google":
                 summary_response = await ai_client.generate_content_async(
                     summary_prompt, 
                     generation_config=generation_config_summary,
-                    stream=True
                 )
-                async for chunk in summary_response:
-                    summary_text += chunk.text
-            except Exception as e:
-                print(f"Error during Google AI summary generation: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Google AI summary generation failed: {str(e)}")
-        elif client_type == "groq": # Fallback logic
-            summary_response_groq = ai_client.chat.completions.create(
-                model="mixtral-8x7b-32768", # Example Groq model
-                messages=[
-                    {"role": "system", "content": "You are an AI assistant specialized in summarizing academic papers."},
-                    {"role": "user", "content": summary_prompt}
-                ],
-                temperature=0.2,
-                max_tokens=600, 
-                top_p=0.2,
-                stream=True
-            )
-            for chunk in summary_response_groq:
-                summary_text += chunk.choices[0].delta.content or ""
-        else:
-            raise HTTPException(status_code=500, detail="Unsupported AI client type for summary.")
+                summary_text = summary_response.text
+            elif client_type == "groq":
+                summary_response_groq = ai_client.chat.completions.create(
+                    model="mixtral-8x7b-32768",
+                    messages=[
+                        {"role": "system", "content": "You are an AI assistant specialized in summarizing academic papers."},
+                        {"role": "user", "content": summary_prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=1024, 
+                    top_p=0.3,
+                )
+                summary_text = summary_response_groq.choices[0].message.content
+            else:
+                raise HTTPException(status_code=500, detail="Unsupported AI client type for summary.")
+        except Exception as e_summary_ai: # Catch any exception from summary AI call
+            print(f"Error during AI summary generation ({client_type}): {type(e_summary_ai).__name__}: {str(e_summary_ai)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"{client_type.capitalize()} AI summary generation failed: {str(e_summary_ai)}")
         
-        actual_summary_output_tokens = count_tokens(summary_text) # Stays tiktoken
-
-        # Calculate cost for summary
+        actual_summary_output_tokens = count_tokens(summary_text)
         actual_summary_cost = (actual_summary_input_tokens + actual_summary_output_tokens) * SUMMARY_COST_PER_TOKEN
         integer_actual_summary_cost = math.ceil(actual_summary_cost)
 
-        # Store summary message
         if db is not None:
             summary_message_record = {
                 "user_id": ObjectId(user_id),
                 "session_id": session_id,
                 "role": "assistant",
                 "content_type": "summary",
-                "content": summary_text, # Storing the raw summary text before further cleaning for response
+                "content": summary_text,
                 "input_tokens": actual_summary_input_tokens,
                 "output_tokens": actual_summary_output_tokens,
-                "estimated_cost": integer_actual_summary_cost, # Storing the calculated cost for this part
+                "estimated_cost": integer_actual_summary_cost, # Storing the actual cost now
                 "timestamp": datetime.utcnow(),
-                "paper_context": {"title": paper_data.title, "authors": paper_data.authors, "abstract": paper_data.abstract} # ADDED
+                "paper_context": {
+                    "title": paper_data.title, 
+                    "content_preview": paper_data.content[:500] + "..." if paper_data.content else ""
+                }
             }
-            db[CHAT_MESSAGES_COLLECTION].insert_one(summary_message_record) # UPDATED
+            db[CHAT_MESSAGES_COLLECTION].insert_one(summary_message_record)
 
-        # Clean the summary output for the API response
         summary = summary_text.strip()
-
-        # 0. Remove <think> tags
         summary = re.sub(r'<think>.*?</think>', '', summary, flags=re.DOTALL).strip()
-
-        # 1. Attempt to extract content if wrapped in markdown-like code blocks
         markdown_match = re.search(r'```(?:text|markdown)?\s*\n([\s\S]*?)\n```', summary, re.IGNORECASE)
         if markdown_match:
             summary = markdown_match.group(1).strip()
@@ -530,213 +541,270 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
             generic_markdown_match = re.search(r'```\s*\n([\s\S]*?)\n```', summary, re.IGNORECASE)
             if generic_markdown_match:
                 summary = generic_markdown_match.group(1).strip()
-
-        # 2. Remove common conversational prefixes and "Summary:" like headers from the beginning of the string
         prefix_patterns = [
-            r"\A\s*here's the summary:\s*",
-            r"\A\s*okay, here is the summary:\s*",
-            r"\A\s*here is the summary:\s*",
-            r"\A\s*summary\s*[:：]*\s*",  # Handles "Summary:", "Summary :", "Summary ："
+            r"^\s*here(?:\'s| is) the summary:\s*",
+            r"^\s*okay, here is the summary:\s*",
+            r"^\s*summary\s*[:：]*\s*",
         ]
         for pattern in prefix_patterns:
-            summary = re.sub(pattern, "", summary, flags=re.IGNORECASE).strip()
-
-        # 3. Final strip
+            summary = re.sub(pattern, "", summary, flags= re.IGNORECASE).strip()
         summary = summary.strip()
 
         # 2. Generate code implementation
         project_suggestions = []
-        code_prompt = f"""
-        You are an AI assistant specialized in generating advanced code implementations based on academic papers.
-        Based on this paper titled "{paper_data.title}" and its summary:
-        Summary: {summary}
+        
+        code_prompt_full_context = f"Paper Title: {paper_data.title}\n"
+        code_prompt_full_context += f"Generated Comprehensive Summary of the Paper: {summary}\n"
+        # Include a larger excerpt of original content for code generation context, especially if abstract is short or missing
+        # This helps ground the code generation in the paper's specifics.
+        key_excerpt_limit = 5000
+        code_prompt_full_context += f"Key Excerpt from Original Paper Content (for additional context):\n{paper_data.content[:key_excerpt_limit]}...\n"
 
-        Generate 1 practical coding project at an advanced level.
+        code_prompt = f"""
+        You are an AI assistant specialized in generating advanced, practical, and well-structured code implementations based on academic research papers.
+        Analyze the provided information from the paper, including its title, authors (if available), abstract (if available), a comprehensive summary, and key excerpts from the original content:
+        {code_prompt_full_context}
+
+        Your task is to generate 1 practical coding project at an advanced level that directly relates to or implements core concepts, algorithms, or methodologies discussed in the paper.
+        The project should be sophisticated enough to be a good starting point for a real application or a detailed proof-of-concept.
         
         Provide:
-        - Title
-        - Description (2-3 sentences)
-        - Programming language to use
-        - Code implementation. If the project involves multiple Python files, structure the 'codeImplementation' as a list of objects, where each object has 'filename' and 'code' keys. For single file projects, you can provide a single object in the list or just the code string.
-        
-        Format your response as valid JSON. Ensure the JSON is well-formed.
+        - title: A concise and descriptive title for the project.
+        - description: A detailed description (4-6 sentences) explaining the project's purpose, how it directly relates to the paper (mention specific concepts if possible), its key features, and potential use cases.
+        - language: The most suitable programming language for this project (e.g., Python, JavaScript, Java, C++, Rust). Choose the language that best fits the problem domain of the paper.
+        - codeImplementation: A list of objects. Each object must have 'filename' (e.g., 'main.py', 'utils.js', 'model.java', 'Cargo.toml', 'package.json') and 'code' (the actual source code for that file). 
+          The code should be as complete as possible for the core functionality, well-commented, and follow best practices for the chosen language. Include necessary boilerplate, imports, and example usage if applicable.
+
+        Format your entire response as a single, valid JSON object. Ensure the JSON is well-formed and adheres strictly to the structure below. Do not include any text outside of this JSON object.
         Example JSON structure:
         {{
-          "title": "Project Title",
-          "description": "Project description.",
+          "title": "Advanced Topic Modeling with Contextual Embeddings",
+          "description": "This project implements a sophisticated topic modeling system using contextual embeddings (e.g., BERT, RoBERTa) as discussed in the paper. It goes beyond traditional LDA by capturing semantic nuances. Key features include preprocessing text data, generating embeddings, clustering embeddings to identify topics, and visualizing topic coherence. Potential use cases include analyzing large document sets for thematic trends or enhancing information retrieval systems.",
           "language": "Python",
           "codeImplementation": [
             {{
               "filename": "main.py",
-              "code": "# Python code for main.py\nprint(\'Hello World\')"
+              "code": "# Python code for main.py\n# Implements the core topic modeling pipeline.\nimport numpy as np\nfrom sklearn.cluster import KMeans\nfrom transformers import AutoTokenizer, AutoModel\n\n# Placeholder for actual implementation\ndef load_and_preprocess_data(texts):\n    # ... text cleaning, tokenization ...\n    return texts\n\ndef get_embeddings(texts, model_name='bert-base-uncased'):\n    tokenizer = AutoTokenizer.from_pretrained(model_name)\n    model = AutoModel.from_pretrained(model_name)\n    inputs = tokenizer(texts, padding=True, truncation=True, return_tensors='pt')\n    outputs = model(**inputs)\n    return outputs.last_hidden_state[:, 0, :].detach().numpy() # CLS token embeddings\n\ndef cluster_embeddings(embeddings, num_topics=10):\n    kmeans = KMeans(n_clusters=num_topics, random_state=42, n_init='auto')\n    kmeans.fit(embeddings)\n    return kmeans.labels_\n\ndef main():\n    sample_texts = [\"This is a document about machine learning.\", \"Deep learning is a subset of AI.\", \"Natural language processing is fascinating.\"]\n    processed_texts = load_and_preprocess_data(sample_texts)\n    embeddings = get_embeddings(processed_texts)\n    topic_labels = cluster_embeddings(embeddings)\n    for text, label in zip(sample_texts, topic_labels):\n        print(f'[Topic {label}] {text}')\n\nif __name__ == '__main__':\n    main()"
+            }},
+            {{
+              "filename": "requirements.txt",
+              "code": "numpy\nscikit-learn\ntransformers\ntorch"
             }}
           ]
         }}
         """
-        actual_code_input_tokens = count_tokens(code_prompt) # Stays tiktoken
+        actual_code_input_tokens = count_tokens(code_prompt)
         code_implementation_str = ""
 
-        if client_type == "google":
-            try:
-                # For JSON output, it's often better to not stream and ensure the model knows to output JSON
-                # Adding a system instruction or modifying the prompt to explicitly ask for JSON.
-                # Google's Gemini can also use `response_mime_type="application/json"` in `generation_config` for some versions/models.
-                # For gemini-1.5-flash, direct JSON mode might not be explicitly supported via response_mime_type, 
-                # so clear prompting is key.
-                
-                # Adjusting prompt slightly for better JSON from Gemini
-                code_prompt_google = f'{code_prompt}\n\nPlease ensure your entire response is a single, valid JSON object as described above, without any surrounding text or explanations.'
-
+        try:
+            if client_type == "google":
                 code_response = await ai_client.generate_content_async(
-                    code_prompt_google, 
-                    generation_config=generation_config_code
-                    # stream=False # Typically better for JSON, but if you need to stream, parse carefully
+                    code_prompt, 
+                    generation_config=generation_config_code # Changed from generation_config_code.to_dict()
                 )
-                # If not streaming, response is not an async iterator
                 code_implementation_str = code_response.text
-            except Exception as e:
-                print(f"Error during Google AI code generation: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Google AI code generation failed: {str(e)}")
-        elif client_type == "groq": # Fallback logic
-            code_response_groq = ai_client.chat.completions.create(
-                model="mixtral-8x7b-32768", # Example Groq model
-                messages=[{"role": "user", "content": code_prompt}],
-                temperature=0.6,
-                max_tokens=12000,
-                top_p=0.1,
-                stream=True # Groq was streaming, Google for JSON might be better non-streamed
-            )
-            for chunk in code_response_groq:
-                code_implementation_str += chunk.choices[0].delta.content or ""
-        else:
-            raise HTTPException(status_code=500, detail="Unsupported AI client type for code generation.")
+            elif client_type == "groq":
+                code_response_groq = ai_client.chat.completions.create(
+                    model="mixtral-8x7b-32768",
+                    messages=[
+                        {"role": "system", "content": "You are an AI assistant that generates code implementations from academic papers in JSON format."},
+                        {"role": "user", "content": code_prompt}
+                    ],
+                    temperature=0.5,
+                    max_tokens=15000, 
+                    top_p=0.2,
+                    response_format={"type": "json_object"} 
+                )
+                code_implementation_str = code_response_groq.choices[0].message.content
+            else:
+                raise HTTPException(status_code=500, detail="Unsupported AI client type for code generation.")
+        except Exception as e_code_ai: # Catch any exception from code AI call
+            print(f"Error during AI code generation ({client_type}): {type(e_code_ai).__name__}: {str(e_code_ai)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"{client_type.capitalize()} AI code generation failed: {str(e_code_ai)}")
         
-        actual_code_output_tokens = count_tokens(code_implementation_str) # Stays tiktoken
-
-        # Calculate cost for code generation
+        actual_code_output_tokens = count_tokens(code_implementation_str)
         actual_code_gen_cost = (actual_code_input_tokens + actual_code_output_tokens) * CODE_GEN_COST_PER_TOKEN
         integer_actual_code_gen_cost = math.ceil(actual_code_gen_cost)
 
-        # Clean the code_implementation_str before attempting to parse JSON
-        # 0. Remove <think> tags
-        cleaned_code_implementation_str = re.sub(r'<think>.*?</think>', '', code_implementation_str, flags=re.DOTALL).strip()
-        
-        # Remove potential markdown code block fences if the model wraps JSON in them
+        cleaned_code_implementation_str = re.sub(r'<think>.*?</think>', '', code_implementation_str, flags= re.DOTALL).strip()
         json_markdown_match = re.search(r'```(?:json)?\s*\n([\s\S]*?)\n```', cleaned_code_implementation_str, re.IGNORECASE)
         if json_markdown_match:
             cleaned_code_implementation_str = json_markdown_match.group(1).strip()
         
-        # Remove conversational prefixes if any (less common for JSON but good to have)
         code_prefix_patterns = [
-            r"\A\s*here's the json output:\s*",
-            r"\A\s*okay, here is the json:\s*",
-            r"\A\s*here is the json code:\s*",
+            r"^\s*here(?:\'s| is) the json(?: output| code)?:\s*",
+            r"^\s*okay, here is the json(?: output| code)?:\s*",
         ]
         for pattern in code_prefix_patterns:
             cleaned_code_implementation_str = re.sub(pattern, "", cleaned_code_implementation_str, flags=re.IGNORECASE).strip()
 
-        # Store code generation message
         if db is not None:
             code_message_record = {
                 "user_id": ObjectId(user_id),
                 "session_id": session_id,
                 "role": "assistant",
                 "content_type": "code_suggestion",
-                "content": cleaned_code_implementation_str, # Storing the cleaned JSON string
+                "content": cleaned_code_implementation_str, # Store the cleaned JSON string
                 "input_tokens": actual_code_input_tokens,
                 "output_tokens": actual_code_output_tokens,
-                "estimated_cost": integer_actual_code_gen_cost, # Storing the calculated cost for this part
+                "estimated_cost": integer_actual_code_gen_cost, # Storing actual cost
                 "timestamp": datetime.utcnow(),
-                "paper_context": {"title": paper_data.title, "summary_preview": summary[:200] + "..." if summary else ""} # ADDED - summary_preview for context
+                "paper_context": {
+                    "title": paper_data.title, 
+                    "summary_preview": summary[:300] + "..." if summary else ""
+                }
             }
-            db[CHAT_MESSAGES_COLLECTION].insert_one(code_message_record) # UPDATED
+            db[CHAT_MESSAGES_COLLECTION].insert_one(code_message_record)
 
-        # Try to parse JSON from the cleaned response
         try:
-            project_data = json.loads(cleaned_code_implementation_str)
+            # Ensure the string is not empty before parsing
+            if not cleaned_code_implementation_str:
+                raise ValueError("LLM returned an empty string for code implementation.")
             
-            # Process projects data
-            if isinstance(project_data, dict):
+            project_data_list = json.loads(cleaned_code_implementation_str)
+            
+            if isinstance(project_data_list, dict):
+                project_data_list = [project_data_list]
+
+            if not isinstance(project_data_list, list) or not project_data_list:
+                 raise ValueError("Parsed JSON is not a list or is an empty list.")
+
+            for project_data in project_data_list:
+                if not isinstance(project_data, dict): 
+                    print(f"Skipping non-dict item in project list: {project_data}")
+                    continue
+
                 raw_code_impl = project_data.get("codeImplementation", project_data.get("code"))
                 code_files = []
 
-                if isinstance(raw_code_impl, list): # Handles list of file objects
+                if isinstance(raw_code_impl, list): 
                     for file_obj in raw_code_impl:
                         if isinstance(file_obj, dict) and "filename" in file_obj and "code" in file_obj:
-                            code_files.append(CodeFile(filename=file_obj["filename"], code=file_obj["code"]))
-                        else: # Fallback for malformed list items
-                            code_files.append(CodeFile(filename="script.py", code=str(file_obj)))
-                elif isinstance(raw_code_impl, str): # Handles single code string
-                    # Determine a default filename based on language or make it generic
+                            code_files.append(CodeFile(filename=str(file_obj["filename"]), code=str(file_obj["code"])))
+                        else:
+                            print(f"Skipping malformed file object in codeImplementation list: {file_obj}")
+                elif isinstance(raw_code_impl, str): 
                     lang = project_data.get("language", "python").lower()
-                    default_filename = f"script.{'py' if lang == 'python' else 'txt'}"
+                    default_filename = f"script.{'py' if lang == 'python' else 'js' if lang == 'javascript' else 'txt'}"
                     code_files.append(CodeFile(filename=default_filename, code=raw_code_impl))
-                else: # Fallback for unexpected type
-                    code_files.append(CodeFile(filename="fallback_script.txt", code="# No valid code provided"))
-
-                if not code_files: # Ensure there's at least one CodeFile object
-                     code_files.append(CodeFile(filename="empty_script.txt", code="# Code generation failed or was empty"))
-
+                
+                if not code_files and raw_code_impl: # If raw_code_impl was present but not parsed into code_files
+                    print(f"Code implementation was present but not parsed into files. Raw: {raw_code_impl}")
+                    code_files.append(CodeFile(filename="unparsed_code.txt", code=str(raw_code_impl)))
+                elif not code_files: # If no code files could be made at all
+                     code_files.append(CodeFile(filename="empty_script.txt", code="# Code generation failed, was empty, or format was not recognized."))
 
                 project_suggestions.append(
                     ProjectSuggestion(
-                        title=project_data.get("title", "Untitled Project"),
-                        description=project_data.get("description", "No description provided"),
+                        title=str(project_data.get("title", "Untitled Project")),
+                        description=str(project_data.get("description", "No description provided.")),
                         codeImplementation=code_files,
-                        language=project_data.get("language", "Python")
+                        language=str(project_data.get("language", "Python"))
                     )
                 )
-        except Exception as e:
-            # Fallback if JSON parsing fails
-            # Attempt to clean the raw string from <think> tags again, just in case it wasn't JSON
-            fallback_code_str = re.sub(r'<think>.*?</think>', '', code_implementation_str, flags=re.DOTALL).strip()
+            if not project_suggestions: 
+                raise ValueError("JSON was parsed, but no valid project data was processed into suggestions.")
+
+        except Exception as e_json_parsing:
+            error_message = f"Error parsing JSON or processing project data: {str(e_json_parsing)}. Raw LLM output: {cleaned_code_implementation_str[:1000]}..."
+            print(error_message)
+            # Fallback: provide the raw (but cleaned) string as a single code file
             project_suggestions.append(
                 ProjectSuggestion(
-                    title="Generated Code Implementation",
-                    description=f"An advanced code implementation based on the concepts in {paper_data.title}",
-                    codeImplementation=[CodeFile(filename="fallback_script.py", code=fallback_code_str)], # Use cleaned string for fallback
-                    language="python"
+                    title="Generated Code (Fallback)",
+                    description=f"Could not fully parse structured JSON output from LLM. Error: {str(e_json_parsing)}. Displaying the raw attempt.",
+                    codeImplementation=[CodeFile(filename="llm_output_fallback.txt", code=cleaned_code_implementation_str if cleaned_code_implementation_str else "# Code generation failed or LLM returned empty.")],
+                    language="text"
                 )
             )
-        if not project_suggestions: # Ensure there's a fallback
+        
+        if not project_suggestions: # Final safety net
             project_suggestions = [
                 ProjectSuggestion(
-                    title="Advanced Implementation", 
-                    description="An advanced implementation based on the paper's concepts.", 
-                    codeImplementation=[CodeFile(filename="advanced_script.py", code="# Advanced implementation\nprint('Hello advanced world')")], 
+                    title="Advanced Implementation (Final Fallback)", 
+                    description="The system was unable to generate or parse a code suggestion. This is a default placeholder.", 
+                    codeImplementation=[CodeFile(filename="final_fallback_script.py", code="# Default fallback: No code generated or parsed.")], 
                     language="Python"
                 )
             ]
 
-        # Calculate actual total cost based on individual actual costs
-        actual_total_cost = actual_summary_cost + actual_code_gen_cost # Sum of individual costs
-        integer_actual_total_cost = math.ceil(actual_total_cost) # This is the total to deduct
-
-        # Though pre-check was done, it's good practice to ensure the user wasn't somehow charged more than they have
-        # This could happen if estimates were way off and actual cost is higher than their current balance after pre-check.
-        # However, the primary check is the pre-computation. This is more of a safeguard.
-        if user_credits < integer_actual_total_cost: 
-            # This scenario should ideally be rare if estimates are decent.
-            # Decide on policy: refund, partial charge, or error. For now, erroring out.
-            print(f"Warning: Actual cost ({integer_actual_total_cost}) exceeded user credits ({user_credits}) post-generation. Initial estimate was {integer_estimated_total_cost}.")
-            raise HTTPException(status_code=402, detail=f"Processing completed, but final cost ({integer_actual_total_cost}) exceeds available credits ({user_credits}). Please contact support.")
-
-        # Deduct actual credits
-        await deduct_credits(str(current_user["_id"]), integer_actual_total_cost)
+        # Deduct actual cost
+        actual_total_cost = integer_actual_summary_cost + integer_actual_code_gen_cost
+        if db is not None:
+            db[USERS_COLLECTION].update_one(
+                {"_id": ObjectId(user_id)},
+                {"$inc": {"credits": -actual_total_cost}}
+            )
+            # Log the credit deduction
+            credit_log_entry = {
+                "user_id": ObjectId(user_id),
+                "session_id": session_id, # Link to the specific interaction
+                "type": "deduction",
+                "amount": actual_total_cost,
+                "reason": "Paper processing (summary and code generation)",
+                "timestamp": datetime.utcnow(),
+                "details": {
+                    "summary_cost": integer_actual_summary_cost,
+                    "code_gen_cost": integer_actual_code_gen_cost,
+                    "paper_title": paper_data.title
+                }
+            }
+            db[CREDIT_LOGS_COLLECTION].insert_one(credit_log_entry)
 
         return ProcessedPaper(
             summary=summary,
-            projectSuggestions=project_suggestions[:1] 
+            projectSuggestions=project_suggestions,
+            credits_remaining=user_credits - actual_total_cost # Return updated credits
         )
 
-    except HTTPException as e: # Re-raise HTTPExceptions to be caught by FastAPI
-        raise e
+    except HTTPException as http_exc: # Specific catch for HTTPExceptions
+        raise http_exc
+    except NameError as name_err: # Specific catch for NameError before generic Exception
+        print(f"Outer NameError caught in process_paper: {str(name_err)}")
+        import traceback
+        traceback.print_exc()
+        # Log to DB if possible
+        if db is not None and user_id and session_id:
+            error_log = {
+                "user_id": ObjectId(user_id),
+                "session_id": session_id,
+                "error_type": type(name_err).__name__,
+                "error_message": str(name_err),
+                "traceback": traceback.format_exc(),
+                "timestamp": datetime.utcnow(),
+                "api_endpoint": "/api/process-paper",
+                "request_data": paper_data.model_dump_json(indent=2) 
+            }
+            log_error_to_db(error_log)
+        raise HTTPException(status_code=500, detail=f"An unexpected NameError occurred: {str(name_err)}")
+    except Exception as e_outer: # Generic catch-all for other exceptions
+        print(f"Outer generic Exception caught in process_paper: {type(e_outer).__name__}: {str(e_outer)}")
+        import traceback
+        traceback.print_exc()
+        if db is not None and user_id and session_id:
+            error_log = {
+                "user_id": ObjectId(user_id),
+                "session_id": session_id,
+                "error_type": type(e_outer).__name__,
+                "error_message": str(e_outer),
+                "traceback": traceback.format_exc(),
+                "timestamp": datetime.utcnow(),
+                "api_endpoint": "/api/process-paper",
+                "request_data": paper_data.model_dump_json(indent=2)
+            }
+            log_error_to_db(error_log)
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e_outer)}")
+
+def log_error_to_db(error_details: dict):
+    """Logs an error to the database."""
+    try:
+        # Remove the specific error logging to ERROR_LOGS_COLLECTION
+        # db[ERROR_LOGS_COLLECTION].insert_one(error_log)
+        print(f"Error logged (in theory): {error_details}")
     except Exception as e:
-        # Log the error for debugging
-        print(f"Error processing paper with LLM: {str(e)}")
-        # Fallback: if an error occurs after credit check but before deduction, 
-        # it might be good to refund or not charge, but for now, we assume deduction happens on success.
-        raise HTTPException(status_code=500, detail=f"Error processing paper with LLM: {str(e)}")
+        print(f"Failed to log error: {str(e)}")
 
 @app.get("/")
 async def root():
@@ -1025,6 +1093,54 @@ async def get_chat_session(session_id: str, current_user: dict = Depends(get_cur
         print(f"Error getting chat session: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting chat session: {str(e)}")
 
+@app.delete("/api/chat/sessions/{session_id}", status_code=204) # Added status_code for no content
+async def delete_chat_session_endpoint(session_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Elimina una sesión de chat específica y todos sus mensajes asociados.
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection not available")
+
+    user_id = current_user["_id"]
+    print(f"Attempting to delete chat session ID: {session_id} for user ID: {user_id}")
+
+    try:
+        session_object_id = ObjectId(session_id)
+    except Exception as e:
+        print(f"Invalid session ID format: {session_id}, error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid session ID format: {session_id}")
+
+    # Primero, verificar que la sesión pertenece al usuario y existe
+    session_to_delete = db[CHAT_SESSIONS_COLLECTION].find_one({
+        "_id": session_object_id,
+        "user_id": user_id
+    })
+
+    if not session_to_delete:
+        print(f"Chat session not found or user mismatch. Session ID: {session_id}, User ID: {user_id}")
+        raise HTTPException(status_code=404, detail="Chat session not found or access denied")
+
+    # Eliminar los mensajes asociados a la sesión
+    delete_messages_result = db[CHAT_MESSAGES_COLLECTION].delete_many({
+        "session_id": session_object_id,
+        "user_id": user_id  # Asegurar que solo se borran mensajes del usuario propietario de la sesión
+    })
+    print(f"Deleted {delete_messages_result.deleted_count} message(s) for session ID: {session_id}")
+
+    # Eliminar la sesión de chat
+    delete_session_result = db[CHAT_SESSIONS_COLLECTION].delete_one({
+        "_id": session_object_id,
+        "user_id": user_id
+    })
+
+    if delete_session_result.deleted_count == 0:
+        # Esto no debería ocurrir si la verificación anterior pasó, pero es una salvaguarda
+        print(f"Failed to delete chat session (already deleted or error). Session ID: {session_id}")
+        raise HTTPException(status_code=404, detail="Chat session could not be deleted, may have been already removed")
+    
+    print(f"Successfully deleted chat session ID: {session_id}")
+    return # FastAPI manejará la respuesta 204 No Content
+
 @app.get("/api/debug/db-status")
 async def get_db_status():
     """
@@ -1085,7 +1201,7 @@ async def get_db_status():
             "message": f"Error checking database: {str(e)}"
         }
 
-if __name__ == "__main__":
+if __name__  == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
 
 

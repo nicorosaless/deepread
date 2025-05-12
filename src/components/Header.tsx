@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
+import { SearchCheck } from 'lucide-react';
 
 const Header = () => {
   const { isAuthenticated, user, logout } = useAuth();
@@ -17,7 +18,16 @@ const Header = () => {
 
         <nav>
           <ul className="flex items-center space-x-6">
-            {/* Chat link removed */}
+            {isAuthenticated && (
+              <li>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/arxiv-search" className="flex items-center">
+                    <SearchCheck className="mr-2 h-4 w-4" />
+                    Explorar ArXiv
+                  </Link>
+                </Button>
+              </li>
+            )}
           </ul>
         </nav>
 

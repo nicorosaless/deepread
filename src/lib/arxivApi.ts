@@ -179,32 +179,33 @@ export const searchArxivPapers = async (params: ArxivSearchParams): Promise<{
     
     // 4. Añadir filtro de timeframe si se ha especificado
     if (params.timeframe && params.timeframe !== 'all') {
-      const date = new Date();
-      let dateFilter = '';
-      
+      const todayForEndDate = new Date(); // Fecha actual para el final del rango
+      const startDate = new Date();     // Fecha de inicio, se modificará según el timeframe
+
       switch (params.timeframe) {
         case 'last_week':
-          date.setDate(date.getDate() - 7);
-          dateFilter = `submittedDate:[${formatDate(date)} TO *]`; // Espacio antes de TO
+          startDate.setDate(todayForEndDate.getDate() - 7);
           break;
         case 'last_month':
-          date.setMonth(date.getMonth() - 1);
-          dateFilter = `submittedDate:[${formatDate(date)} TO *]`; // Espacio antes de TO
+          startDate.setMonth(todayForEndDate.getMonth() - 1);
           break;
         case 'last_year':
-          date.setFullYear(date.getFullYear() - 1);
-          dateFilter = `submittedDate:[${formatDate(date)} TO *]`; // Espacio antes de TO
+          startDate.setFullYear(todayForEndDate.getFullYear() - 1);
           break;
       }
+
+      const formattedStartDate = formatDate(startDate); // formatDate produce YYYYMMDD
+      const formattedEndDate = formatDate(todayForEndDate); // Fecha actual formateada
+
+      // Construir el filtro de fecha como un rango cerrado
+      const dateFilter = `submittedDate:[${formattedStartDate} TO ${formattedEndDate}]`;
       
-      if (dateFilter) {
-        if (finalSearchQuery) {
-          // Envolver la consulta existente y el filtro de fecha en paréntesis
-          finalSearchQuery = `(${finalSearchQuery}) AND (${dateFilter})`;
-        } else {
-          // Si no había otra consulta, el filtro de fecha es la consulta
-          finalSearchQuery = dateFilter;
-        }
+      if (finalSearchQuery) {
+        // Envolver la consulta existente y el filtro de fecha en paréntesis
+        finalSearchQuery = `(${finalSearchQuery}) AND (${dateFilter})`;
+      } else {
+        // Si no había otra consulta (poco probable), el filtro de fecha es la consulta
+        finalSearchQuery = dateFilter;
       }
     }
     

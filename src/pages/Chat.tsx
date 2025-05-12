@@ -1,16 +1,20 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import ChatHistory from '@/components/chat/ChatHistory';
-import ChatInput from '@/components/chat/ChatInput';
 import PaperAnalysis from '@/components/chat/PaperAnalysis';
 import { useChatSessions } from '@/components/chat/useChatSessions';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Coins } from 'lucide-react';
-import ProcessedPapersDisplay from '@/components/chat/ProcessedPapersDisplay'; // Import the new component
+import ProcessedPapersDisplay from '@/components/chat/ProcessedPapersDisplay'; 
+import ArxivSearch from '@/components/arxiv/ArxivSearch';
+import { ArxivPaper } from '@/lib/types'; // Importar ArxivPaper
+import LoadingState from '@/components/LoadingState'; // Import the LoadingState component
 
 const Chat = () => {
+  const [isArxivSearchActive, setIsArxivSearchActive] = useState(false);
+
   const {
     isProcessing,
     processingStage,
@@ -19,12 +23,13 @@ const Chat = () => {
     currentSession,
     currentPaperData,
     currentProcessedData,
-    fileUploadedForCurrentSession,
     isLoadingSessions,
+    isAutoProcessing, // Obtener el nuevo estado
     handleNewChat,
     handleSessionSelect,
     handleFileSelected,
-    handleAddMessage
+    handleNewChatWithArxivPaper, // Obtener la nueva función
+    deleteChatSession, // Add deleteChatSession to destructured props
   } = useChatSessions();
   const { user } = useAuth();
   
@@ -45,13 +50,24 @@ const Chat = () => {
     });
   };
 
-  const handleSendMessage = async (message: string) => {
-    // Primero agregamos el mensaje del usuario
-    await handleAddMessage(message, 'user');
-    
-    // Aquí podríamos implementar una respuesta de la IA, pero por ahora solo mostraremos el mensaje del usuario
-    // Si quisiéramos una respuesta automática, podríamos hacer algo como:
-    // await handleAddMessage(`Respuesta a: ${message}`, 'assistant');
+  const showArxivSearch = () => {
+    setIsArxivSearchActive(true);
+  };
+
+  const hideArxivSearchAndSelectSession = (sessionId: string) => {
+    setIsArxivSearchActive(false);
+    handleSessionSelect(sessionId);
+  };
+
+  const handleNewChatAndHideArxiv = () => {
+    setIsArxivSearchActive(false);
+    handleNewChat(); // Llama a handleNewChat sin argumentos para un chat normal
+  }
+
+  // Nueva función para manejar la selección de paper desde ArxivSearch
+  const handlePaperSelectedFromArxiv = (paper: ArxivPaper) => {
+    setIsArxivSearchActive(false); // Ocultar la vista de búsqueda de ArXiv
+    handleNewChatWithArxivPaper(paper); // Llamar a la función del hook para crear y procesar
   };
 
   return (
@@ -61,8 +77,10 @@ const Chat = () => {
           <ChatSidebar 
             chatSessions={chatSessions}
             currentSessionId={currentSessionId}
-            handleSessionSelect={handleSessionSelect}
-            handleNewChat={handleNewChat}
+            handleSessionSelect={hideArxivSearchAndSelectSession} 
+            handleNewChat={handleNewChatAndHideArxiv} 
+            onShowArxivSearch={showArxivSearch} 
+            handleDeleteSession={deleteChatSession} // Pass deleteChatSession to ChatSidebar
           />
         </Sidebar>
         
@@ -77,38 +95,53 @@ const Chat = () => {
           )}
 
           <div className="flex flex-col flex-1 overflow-hidden">
-            <div className="flex-1 overflow-y-auto flex flex-col">
-              {isLoadingSessions ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-muted-foreground">Cargando conversaciones...</p>
+            {isArxivSearchActive ? (
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+                <div className="max-w-4xl mx-auto">
+                  <h1 className="text-2xl font-semibold mb-6">Explorar ArXiv</h1>
+                  <ArxivSearch onPaperSelectedForDeepRead={handlePaperSelectedFromArxiv} /> {/* Pasar la nueva prop */}
                 </div>
-              ) : (
-                <ChatHistory 
-                  messages={currentSession.messages}
-                  isProcessing={isProcessing}
-                  processingStage={processingStage}
-                  messagesEndRef={messagesEndRef}
-                  handleFileSelected={handleFileSelected}
-                />
-              )}
-            </div>
-            
-            <ChatInput 
-              isProcessing={isProcessing}
-              onSendMessage={handleSendMessage}
-            />
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto flex flex-col p-4 md:p-6"> {/* Scrollable area for chat content */}
+                {isLoadingSessions || isAutoProcessing ? ( // Mostrar loading si carga sesiones o auto-procesa
+                  <div className="flex items-center justify-center h-full">
+                    <LoadingState 
+                      message={
+                        isAutoProcessing 
+                          ? processingStage || 'Processing ArXiv paper...'
+                          : 'Loading chats...'
+                      }
+                    />
+                  </div>
+                ) : (
+                  <ChatHistory 
+                    messages={currentSession.messages}
+                    isProcessing={isProcessing} // isProcessing normal para subida de archivos
+                    processingStage={processingStage}
+                    messagesEndRef={messagesEndRef}
+                    handleFileSelected={handleFileSelected}
+                  />
+                )}
+                
+                {/* PaperAnalysis and ProcessedPapersDisplay MOVED INSIDE the scrollable area */}
+                {!isAutoProcessing && (currentPaperData || currentProcessedData) && (
+                  <div className="mt-4"> {/* Added margin-top for spacing */}
+                    <PaperAnalysis 
+                      paperData={currentPaperData}
+                      processedData={currentProcessedData}
+                      scrollToTop={scrollToTop} // Consider if scrollToTop is still needed here or if scroll focuses on new content
+                    />
+                  </div>
+                )}
+                {!isAutoProcessing && (
+                  <div className="mt-4"> {/* Added margin-top for spacing */}
+                    <ProcessedPapersDisplay />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          
-          {(currentPaperData || currentProcessedData) && (
-             <PaperAnalysis 
-                paperData={currentPaperData}
-                processedData={currentProcessedData}
-                scrollToTop={scrollToTop}
-              />
-          )}
-
-          {/* Display Past Paper Analyses First */}
-          <ProcessedPapersDisplay />
         </SidebarInset>
       </div>
     </SidebarProvider>

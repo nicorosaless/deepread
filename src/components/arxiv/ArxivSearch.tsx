@@ -15,8 +15,15 @@ import { useArxivSearch } from '@/components/arxiv/useArxivSearch';
 import ArxivPaperList from '@/components/arxiv/ArxivPaperList';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getArxivAICategories, getTimeframeOptions } from '@/lib/arxivApi';
+import { ArxivPaper } from '@/lib/types'; // Import ArxivPaper type
+import { useChatSessions } from '@/components/chat/useChatSessions'; // Import useChatSessions
+import LoadingState from '@/components/LoadingState'; // Import LoadingState
 
-const ArxivSearch: React.FC = () => {
+interface ArxivSearchProps {
+  onPaperSelectedForDeepRead?: (paper: ArxivPaper) => void; // Nueva prop opcional
+}
+
+const ArxivSearch: React.FC<ArxivSearchProps> = ({ onPaperSelectedForDeepRead }) => {
   const [searchQuery, setSearchQuery] = useState('');
   // Mantener estas variables con valores predeterminados
   const sortBy = 'lastUpdatedDate';
@@ -42,6 +49,13 @@ const ArxivSearch: React.FC = () => {
     goToPreviousPage
   } = useArxivSearch();
 
+  // Obtener handleAddMessage y otras funciones necesarias de useChatSessions
+  // Esto asume que ArxivSearch se renderiza en un contexto donde useChatSessions está disponible
+  // o que pasamos las funciones necesarias como props si no es así.
+  // Por simplicidad, lo llamaremos aquí, pero podría necesitar refactorización
+  // dependiendo de dónde se use ArxivSearch y cómo se maneje el estado del chat.
+  const { handleNewChatWithArxivPaper } = useChatSessions(); 
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -66,6 +80,21 @@ const ArxivSearch: React.FC = () => {
 
   const handleRetry = () => {
     retrySearch();
+  };
+
+  const handleDeepReadClick = (paper: ArxivPaper) => {
+    if (onPaperSelectedForDeepRead) {
+      onPaperSelectedForDeepRead(paper);
+    } else {
+      // Lógica por defecto si no se proporciona la prop (ej. si ArxivSearch se usa en otro lugar)
+      // Esto podría implicar llamar a una función de useChatSessions directamente
+      console.log("DeepRead it clicked for paper:", paper.title);
+      // Aquí llamarías a la función para crear un nuevo chat y procesar el paper
+      // Ejemplo: handleNewChatWithArxivPaper(paper);
+      if (handleNewChatWithArxivPaper) {
+        handleNewChatWithArxivPaper(paper);
+      }
+    }
   };
 
   return (
@@ -147,8 +176,8 @@ const ArxivSearch: React.FC = () => {
       </form>
 
       {loading && (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="py-12">
+          <LoadingState message="Searching ArXiv..." />
         </div>
       )}
 
@@ -179,6 +208,7 @@ const ArxivSearch: React.FC = () => {
           loading={loading}
           onNextPage={goToNextPage}
           onPreviousPage={goToPreviousPage}
+          onDeepReadPaper={handleDeepReadClick} // Pasar la nueva función de manejo
         />
       )}
 

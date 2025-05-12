@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChatSession, ChatMessage, PaperData, ProcessedPaper } from '@/lib/types';
+import { ChatSession, ChatMessage, PaperData, ProcessedPaper, ArxivPaper } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
-import { extractTextFromPDF, processPaperWithLLM, saveUserChatSession, getUserChatSessions } from '@/lib/api';
+import { extractTextFromPDF, processPaperWithLLM, saveUserChatSession, getUserChatSessions, deleteChatSession as apiDeleteChatSession } from '@/lib/api'; // Import deleteChatSession
 import { useAuth } from '@/context/AuthContext';
 
 export function useChatSessions() {
@@ -24,6 +24,7 @@ export function useChatSessions() {
   const [currentProcessedData, setCurrentProcessedData] = useState<ProcessedPaper | null>(null);
   const [isSavingSession, setIsSavingSession] = useState<boolean>(false);
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(false);
+  const [isAutoProcessing, setIsAutoProcessing] = useState<boolean>(false); // Nuevo estado
   
   // En lugar de usar una ref que persiste entre recargas, usamos un estado
   const [sessionsAttempted, setSessionsAttempted] = useState<boolean>(false);
@@ -186,50 +187,138 @@ export function useChatSessions() {
     message.role === 'user' && message.paperData !== undefined
   );
 
-  const handleNewChat = async () => {
+  const handleNewChat = async (autoProcessPaper?: ArxivPaper) => {
+    const newSessionId = uuidv4(); // Generar ID de cliente para la nueva sesión
+    const initialTitle = autoProcessPaper ? autoProcessPaper.title.substring(0,30) + "..." : 'New Chat';
+    
     const newSession: ChatSession = {
-      id: 'new', // Cambiado de uuidv4() a 'new' para que el servidor asigne un ID válido
-      title: 'New Chat',
+      id: newSessionId,
+      title: initialTitle,
       lastUpdated: new Date(),
       messages: []
     };
 
-    setChatSessions(prev => [...prev, newSession]);
-    setCurrentSessionId('new'); // Usamos 'new' temporalmente
+    setChatSessions(prev => [newSession, ...prev]); // Añadir al principio para mejor UX
+    setCurrentSessionId(newSessionId);
     setCurrentPaperData(null);
     setCurrentProcessedData(null);
-    
-    // Si el usuario está autenticado, guardamos la nueva sesión
+    setIsAutoProcessing(!!autoProcessPaper); // Activar auto-procesamiento si se proporciona un paper
+
     if (isAuthenticated && user) {
       try {
-        // Al enviar la sesión al servidor, eliminamos el id para que MongoDB asigne uno nuevo
-        const sessionToSave = {
-          ...newSession
-        };
-        delete sessionToSave.id; // Eliminamos el id para que el servidor lo genere
+        const sessionToSave = { ...newSession };
+        // El ID generado por el cliente se usará, el backend puede optar por usarlo o generar uno nuevo
+        // Dependiendo de la configuración del backend, es posible que no necesites eliminar el id.
+        // Si el backend espera generar el ID, entonces: delete sessionToSave.id;
         
-        console.log("Creating new session on server...");
+        console.log("Creating new session on server with potential ArXiv paper...");
         const savedSession = await saveUserChatSession(sessionToSave);
-        console.log("New session created with ID:", savedSession.id);
+        console.log("New session created/updated with ID:", savedSession.id);
+
+        // Si el backend devuelve un ID diferente (o el mismo), actualiza el estado
+        // Esto es importante si el backend genera/confirma el ID.
+        if (savedSession.id !== newSessionId) {
+          setChatSessions(prev => 
+            prev.map(session => 
+              session.id === newSessionId ? { ...session, id: savedSession.id, title: savedSession.title } : session
+            )
+          );
+          setCurrentSessionId(savedSession.id);
+        }
         
-        // Actualizamos el ID con el retornado del servidor
-        setChatSessions(prev => 
-          prev.map(session => 
-            session.id === 'new' ? { ...session, id: savedSession.id } : session
-          )
-        );
-        setCurrentSessionId(savedSession.id);
-        
-        // Actualizar el último guardado
         lastSavedSession.current = {
           id: savedSession.id,
           timestamp: new Date()
         };
+
+        if (autoProcessPaper) {
+          // Inmediatamente después de crear la sesión, procesar el paper de ArXiv
+          // Convertir ArxivPaper a PaperData y simular la subida de un archivo
+          const paperDataFromArxiv: PaperData = {
+            title: autoProcessPaper.title,
+            content: autoProcessPaper.summary
+          };
+          await processAndAddArxivPaper(paperDataFromArxiv, savedSession.id); 
+        }
+
       } catch (error) {
-        console.error('Error creating new chat session:', error);
-        // En caso de error, volvemos a la sesión default
-        setCurrentSessionId('default');
+        console.error('Error creating new chat session with ArXiv paper:', error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not start chat with ArXiv paper.' });
+        // Revertir a una sesión anterior o default si falla la creación
+        if (chatSessions.length > 1) {
+            setCurrentSessionId(chatSessions[1].id); // Volver a la anterior si existe
+        } else {
+            setCurrentSessionId('default');
+        }
+      } finally {
+        setIsAutoProcessing(false); // Desactivar después del intento
       }
+    } else if (autoProcessPaper) {
+        // Manejo para usuarios no autenticados (si se permite)
+        // Por ahora, simplemente procesar localmente sin guardar
+        const paperDataFromArxiv: PaperData = {
+            title: autoProcessPaper.title,
+            content: autoProcessPaper.summary
+        };
+        await processAndAddArxivPaper(paperDataFromArxiv, newSessionId);
+        setIsAutoProcessing(false);
+    }
+  };
+
+  // Nueva función para manejar la creación de chat desde un paper de ArXiv
+  const handleNewChatWithArxivPaper = (arxivPaper: ArxivPaper) => {
+    handleNewChat(arxivPaper); // Llamar a handleNewChat con el paper
+    // La lógica de procesamiento se moverá a handleNewChat o una función llamada desde allí
+  };
+
+  // Nueva función para procesar y añadir mensajes de un paper de ArXiv
+  const processAndAddArxivPaper = async (paperData: PaperData, sessionId: string) => {
+    try {
+      setIsProcessing(true);
+      setProcessingStage('Analyzing ArXiv paper with AI...');
+      setCurrentPaperData(paperData); // Mostrar datos del paper mientras se procesa
+
+      const processedPaper = await processPaperWithLLM(paperData);
+      setCurrentProcessedData(processedPaper);
+
+      const userMessage: ChatMessage = {
+        id: uuidv4(),
+        content: `Selected ArXiv paper: ${paperData.title}`,
+        role: 'user',
+        paperData: paperData,
+        processedData: processedPaper,
+        timestamp: new Date(),
+        content_type: 'arxiv_paper_selection'
+      };
+
+      const assistantMessage: ChatMessage = {
+        id: uuidv4(),
+        content: `I've analyzed the ArXiv paper "${paperData.title}". Here's what I found:`,
+        role: 'assistant',
+        timestamp: new Date()
+      };
+
+      setChatSessions(prevSessions => 
+        prevSessions.map(session => {
+          if (session.id === sessionId) {
+            return {
+              ...session,
+              title: paperData.title.length > 30 ? `${paperData.title.substring(0, 30)}...` : paperData.title,
+              lastUpdated: new Date(),
+              messages: [userMessage, assistantMessage]
+            };
+          }
+          return session;
+        })
+      );
+      refreshUserProfileOptimized();
+    } catch (error: any) {
+      console.error('Error processing ArXiv paper:', error);
+      // ... manejo de errores similar a handleFileSelected ...
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to process ArXiv paper.' });
+    } finally {
+      setIsProcessing(false);
+      setProcessingStage('');
     }
   };
 
@@ -354,6 +443,55 @@ export function useChatSessions() {
     setChatSessions(updatedSessions);
   };
 
+  const deleteChatSession = async (sessionIdToDelete: string) => {
+    if (!isAuthenticated || !user) {
+      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to delete sessions.' });
+      return;
+    }
+
+    // Optimistically update UI
+    const previousSessions = chatSessions;
+    const updatedSessions = chatSessions.filter(session => session.id !== sessionIdToDelete);
+    setChatSessions(updatedSessions);
+
+    // If the current session is being deleted, select a new one
+    if (currentSessionId === sessionIdToDelete) {
+      if (updatedSessions.length > 0) {
+        // Select the most recent session
+        const mostRecentSession = updatedSessions.sort((a, b) => 
+          new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
+        )[0];
+        setCurrentSessionId(mostRecentSession.id);
+        // Update paper data for the new current session
+        const lastUserMessageWithPaper = mostRecentSession.messages
+          .filter(m => m.role === 'user' && m.paperData)
+          .pop();
+        setCurrentPaperData(lastUserMessageWithPaper?.paperData || null);
+        setCurrentProcessedData(lastUserMessageWithPaper?.processedData || null);
+      } else {
+        // If no sessions left, create a new default one (or handle as appropriate)
+        handleNewChat(); // This will create a new default session
+      }
+    }
+
+    try {
+      await apiDeleteChatSession(sessionIdToDelete); // Use the aliased API function
+      toast({ variant: 'default', title: 'Success', description: 'Chat session deleted.' });
+      // No need to refresh user profile here unless credits are involved in session deletion
+    } catch (error: any) { // Add type any to error
+      console.error('Error deleting chat session from server:', error);
+      // Use error.message for a more specific toast description
+      const errorMessage = error?.message || 'Failed to delete session from server. Reverting local changes.';
+      toast({ variant: 'destructive', title: 'Error', description: errorMessage });
+      // Revert UI changes if server deletion fails
+      setChatSessions(previousSessions);
+      if (currentSessionId === sessionIdToDelete) { // If current session was deleted and failed
+          setCurrentSessionId(sessionIdToDelete); // Revert to the one that failed to delete
+          // Potentially revert paper data as well if needed
+      }
+    }
+  };
+
   return {
     isProcessing,
     processingStage,
@@ -365,9 +503,12 @@ export function useChatSessions() {
     currentProcessedData,
     fileUploadedForCurrentSession,
     isLoadingSessions,
+    isAutoProcessing, // Exponer el nuevo estado
     handleNewChat,
     handleSessionSelect,
     handleFileSelected,
-    handleAddMessage
+    handleAddMessage,
+    handleNewChatWithArxivPaper, // Exponer la nueva función
+    deleteChatSession, // Expose deleteChatSession
   };
 }

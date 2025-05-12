@@ -1,9 +1,6 @@
 export interface PaperData {
   title: string;
   content: string;
-  authors?: string[];
-  abstract?: string;
-  date?: string;
 }
 
 export interface ProcessedPaper {

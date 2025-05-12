@@ -13,20 +13,24 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { LogOut, Plus } from 'lucide-react';
+import { LogOut, Plus, Search, FileSearch, Trash2 } from 'lucide-react'; // Import FileSearch and Trash2 icons
 
 interface ChatSidebarProps {
   chatSessions: ChatSession[];
   currentSessionId: string;
   handleSessionSelect: (sessionId: string) => void;
   handleNewChat: () => void;
+  onShowArxivSearch: () => void;
+  handleDeleteSession: (sessionId: string) => void; // New prop for deleting a session
 }
 
 const ChatSidebar: React.FC<ChatSidebarProps> = ({
   chatSessions,
   currentSessionId,
   handleSessionSelect,
-  handleNewChat
+  handleNewChat,
+  onShowArxivSearch,
+  handleDeleteSession, // Use the new prop
 }) => {
   const { user, logout } = useAuth();
 
@@ -56,29 +60,67 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </div>
       </SidebarHeader>
       <SidebarContent className="p-2">
+        {/* Sección para el botón de ArXiv Search */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Search for papers" // Changed tooltip
+                  onClick={onShowArxivSearch}
+                  className={`
+                    w-full justify-start text-sm
+                    hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+                  `}
+                >
+                  <FileSearch className="mr-2 h-4 w-4" /> {/* Changed icon */}
+                  Search for papers {/* Changed text */}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        
+        <SidebarSeparator />
+
+        {/* Sección del historial de chats */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
               {chatSessions.map((session) => (
                 <SidebarMenuItem key={session.id}>
-                  <SidebarMenuButton 
-                    tooltip={session.title}
-                    isActive={currentSessionId === session.id}
-                    onClick={() => handleSessionSelect(session.id)}
-                    className={`
-                      w-full justify-start text-sm 
-                      ${currentSessionId === session.id 
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
-                        : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}
-                    `}
-                  >
-                    <span className="truncate">{session.title}</span>
-                  </SidebarMenuButton>
+                  <div className="flex items-center w-full">
+                    <SidebarMenuButton
+                      tooltip={session.title}
+                      isActive={currentSessionId === session.id}
+                      onClick={() => handleSessionSelect(session.id)}
+                      className={`
+                        flex-grow justify-start text-sm truncate
+                        ${currentSessionId === session.id
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}
+                      `}
+                    >
+                      <span className="truncate">{session.title}</span>
+                    </SidebarMenuButton>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-2 text-sidebar-foreground/70 hover:text-red-500 hover:bg-sidebar-accent flex-shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent session selection
+                        handleDeleteSession(session.id);
+                      }}
+                      title="Delete chat"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </SidebarMenuItem>
               ))}
               {chatSessions.length === 0 && (
                 <p className="p-4 text-sm text-sidebar-foreground/70 text-center">
-                  No chat history yet. Start a new chat to see it here.
+                  Inicia un nuevo chat o explora ArXiv.
                 </p>
               )}
             </SidebarMenu>
