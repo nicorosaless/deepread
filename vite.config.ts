@@ -9,6 +9,12 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    fs: {
+      // Allow serving files from one level up to the project root
+      allow: ['..'],
+    },
+    // Ensure proper MIME types are set
+    middlewareMode: false,
   },
   plugins: [
     react(),
