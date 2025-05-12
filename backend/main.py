@@ -65,7 +65,7 @@ JWT_EXPIRATION_DELTA = timedelta(days=7)
 
 # Models
 # SUMMARY_MODEL and CODE_MODEL are no longer needed as we'll use Google's model directly
-GOOGLE_MODEL_NAME = "gemini-1.0-pro" # Cambiado a un modelo más estable para Vercel
+GOOGLE_MODEL_NAME = "gemini-2.0-flash" # Cambiado a un modelo más estable para Vercel
 
 # Crear la instancia de FastAPI antes de definir modelos y rutas
 app = FastAPI(title="DeepRead API")
