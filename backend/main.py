@@ -51,7 +51,15 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "") # Added Google API Key
 
 # JWT Configuration
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")  # Change in production
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    # Genera un secreto aleatorio si JWT_SECRET no está configurado
+    import secrets
+    JWT_SECRET = secrets.token_hex(32)
+    print(f"ADVERTENCIA: JWT_SECRET no configurado en variables de entorno.")
+    print(f"Se ha generado un secreto temporal: {JWT_SECRET}")
+    print("IMPORTANTE: Este secreto cambiará en cada reinicio, invalidando tokens anteriores.")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DELTA = timedelta(days=7)
 
