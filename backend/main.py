@@ -57,7 +57,7 @@ JWT_EXPIRATION_DELTA = timedelta(days=7)
 
 # Models
 # SUMMARY_MODEL and CODE_MODEL are no longer needed as we'll use Google's model directly
-GOOGLE_MODEL_NAME = "gemini-2.0-flash" # Cambio a 1.5-flash para asegurar compatibilidad
+GOOGLE_MODEL_NAME = "gemini-1.0-pro" # Cambiado a un modelo más estable para Vercel
 
 # Crear la instancia de FastAPI antes de definir modelos y rutas
 app = FastAPI(title="DeepRead API")
@@ -100,7 +100,9 @@ class ChatMessage(BaseModel):
 # Database connection setup
 client = None
 db = None
-MAX_DB_CONNECT_RETRIES = 3
+MAX_DB_CONNECT_RETRIES = 5  # Aumentado a 5 intentos
+DB_CONNECT_TIMEOUT = 15000  # 15 segundos de timeout para selección de servidor
+DB_SOCKET_TIMEOUT = 45000   # 45 segundos de timeout para operaciones de socket
 
 @app.on_event("startup")
 async def startup_db_client():
@@ -109,55 +111,91 @@ async def startup_db_client():
     
     while connect_retries < MAX_DB_CONNECT_RETRIES:
         try:
-            # Usar pymongo en lugar de motor
-            print(f"Attempting to connect to MongoDB: {MONGODB_URL}")
-            client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
+            print(f"[{connect_retries+1}/{MAX_DB_CONNECT_RETRIES}] Intentando conectar a MongoDB: {MONGODB_URL}")
+            # Configuración mejorada de cliente MongoDB con timeouts más largos
+            client = MongoClient(
+                MONGODB_URL,
+                serverSelectionTimeoutMS=DB_CONNECT_TIMEOUT,
+                socketTimeoutMS=DB_SOCKET_TIMEOUT,
+                connectTimeoutMS=30000,
+                retryWrites=True,
+                retryReads=True,
+                w="majority"  # Garantiza escritura en mayoría de nodos
+            )
             
-            # Verificar la conexión
+            # Verificar la conexión de manera explícita
             client.admin.command('ping')
+            print("Conexión a MongoDB establecida - Ping exitoso")
+            
             db = client[DATABASE_NAME]
             
             # Crear índice para el email único
-            db[USERS_COLLECTION].create_index("email", unique=True)
-            print("MongoDB connection established successfully")
+            if USERS_COLLECTION in db.list_collection_names():
+                print(f"Colección {USERS_COLLECTION} existe, verificando índice")
+                indexes = list(db[USERS_COLLECTION].list_indexes())
+                has_email_index = any("email_1" in idx["name"] for idx in indexes)
+                if not has_email_index:
+                    print("Creando índice único para email")
+                    db[USERS_COLLECTION].create_index("email", unique=True)
+                else:
+                    print("Índice de email ya existe")
+            else:
+                print(f"Colección {USERS_COLLECTION} no existe, se creará al insertar el primer documento")
+                db[USERS_COLLECTION].create_index("email", unique=True)
+            
+            print("=== Inicialización de MongoDB completada con éxito ===")
             break
+            
         except Exception as e:
             connect_retries += 1
-            print(f"Failed to connect to MongoDB (attempt {connect_retries}/{MAX_DB_CONNECT_RETRIES}): {e}")
+            error_type = type(e).__name__
+            error_msg = str(e)
+            print(f"Error conectando a MongoDB (intento {connect_retries}/{MAX_DB_CONNECT_RETRIES}): {error_type}: {error_msg}")
+            
+            # Si es el último intento, configuramos client y db como None
             if connect_retries >= MAX_DB_CONNECT_RETRIES:
-                print("Max connection attempts reached. Database might be unavailable.")
+                print("CRÍTICO: Máximo de intentos de conexión alcanzado. Base de datos no disponible.")
                 client = None
                 db = None
             else:
-                # Wait before retrying
+                # Incrementamos el tiempo de espera entre intentos
                 import time
-                time.sleep(2)  # Wait 2 seconds before retry
+                wait_time = connect_retries * 2  # 2s, 4s, 6s, 8s
+                print(f"Esperando {wait_time} segundos antes del siguiente intento...")
+                time.sleep(wait_time)
     
-    if has_groq and GROQ_API_KEY: # Keep Groq for now as a potential fallback or for other uses
-        try:
-            app.state.groq_client = Groq(api_key=GROQ_API_KEY)
-            print("Groq client initialized")
-        except Exception as e:
-            print(f"Failed to initialize Groq client: {e}")
-            app.state.groq_client = None
-
-    if GOOGLE_API_KEY:
-        try:
-            genai.configure(api_key=GOOGLE_API_KEY)
-            app.state.google_ai_client = genai.GenerativeModel(GOOGLE_MODEL_NAME)
-            print("Google AI client initialized with model:", GOOGLE_MODEL_NAME)
-        except Exception as e:
-            print(f"Failed to initialize Google AI client: {e}")
+    # Inicialización de clientes de IA
+    try:
+        if GOOGLE_API_KEY:
+            try:
+                genai.configure(api_key=GOOGLE_API_KEY)
+                app.state.google_ai_client = genai.GenerativeModel(GOOGLE_MODEL_NAME)
+                print(f"Cliente Google AI inicializado con modelo: {GOOGLE_MODEL_NAME}")
+            except Exception as e:
+                print(f"Error al inicializar cliente Google AI: {e}")
+                app.state.google_ai_client = None
+        else:
+            print("Google API Key no encontrada. Cliente Google AI no inicializado.")
             app.state.google_ai_client = None
-    else:
-        print("Google API Key not found. Google AI client not initialized.")
-        app.state.google_ai_client = None
-    
+            
+        # Inicialización de Groq si está disponible
+        if has_groq and GROQ_API_KEY:
+            try:
+                app.state.groq_client = Groq(api_key=GROQ_API_KEY)
+                print("Cliente Groq inicializado exitosamente")
+            except Exception as e:
+                print(f"Error al inicializar cliente Groq: {e}")
+                app.state.groq_client = None
+    except Exception as e:
+        print(f"Error al inicializar clientes de IA: {e}")
+        
 @app.on_event("shutdown")
 async def shutdown_db_client():
     global client
     if client:
+        print("Cerrando conexión a MongoDB...")
         client.close()
+        print("Conexión cerrada exitosamente")
 
 # Models
 class UserCreate(BaseModel):
@@ -1223,6 +1261,69 @@ async def get_db_status():
             "status": "error",
             "message": f"Error checking database: {str(e)}"
         }
+
+@app.get("/api/health")
+async def health_check():
+    """
+    Endpoint de diagnóstico para verificar la salud general de la aplicación
+    """
+    status = {
+        "api": "ok", 
+        "timestamp": datetime.utcnow().isoformat(),
+        "mongodb": "unknown",
+        "ai_services": {}
+    }
+    
+    # Verificar estado de MongoDB
+    try:
+        if db is None:
+            status["mongodb"] = "not_connected"
+            status["mongodb_error"] = "Database connection not established during startup"
+        else:
+            # Intentar hacer una operación simple para verificar que la conexión está viva
+            db.command("ping")
+            status["mongodb"] = "connected"
+            
+            # Información adicional sobre colecciones
+            try:
+                collections = db.list_collection_names()
+                status["mongodb_collections"] = collections
+                status["mongodb_details"] = {
+                    "users_count": db[USERS_COLLECTION].count_documents({}) if USERS_COLLECTION in collections else 0
+                }
+            except Exception as e:
+                status["mongodb_details_error"] = str(e)
+    except Exception as e:
+        status["mongodb"] = "error"
+        status["mongodb_error"] = str(e)
+    
+    # Verificar estado de servicios de IA
+    if hasattr(app.state, "google_ai_client") and app.state.google_ai_client:
+        status["ai_services"]["google_ai"] = "configured"
+    else:
+        status["ai_services"]["google_ai"] = "not_configured"
+        
+    if hasattr(app.state, "groq_client") and app.state.groq_client:
+        status["ai_services"]["groq"] = "configured"
+    else:
+        status["ai_services"]["groq"] = "not_configured"
+        
+    # Verificar variables de entorno (sin mostrar valores sensibles)
+    status["env_check"] = {
+        "MONGODB_URI": "set" if MONGODB_URI else "missing",
+        "GOOGLE_API_KEY": "set" if GOOGLE_API_KEY else "missing",
+        "GROQ_API_KEY": "set" if GROQ_API_KEY else "missing",
+        "JWT_SECRET": "set" if JWT_SECRET != "your-secret-key" else "default_insecure_value"
+    }
+    
+    # Si hay problemas críticos, devolver código de estado 503
+    if status["mongodb"] != "connected":
+        return JSONResponse(
+            status_code=503,
+            content=status
+        )
+    
+    return status
 
 if __name__  == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
