@@ -16,7 +16,7 @@ function determineBaseUrl() {
   
   // No agregamos prefijo en producción - las solicitudes se hacen relativamente
   // Esto permite que funcione en cualquier dominio (Vercel, Render, etc.)
-  return "";
+  return "https://deepreadbackend.vercel.app";
 }
 
 const BASE_URL = determineBaseUrl();
