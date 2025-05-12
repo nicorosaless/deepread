@@ -76,7 +76,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080",  # Frontend dev server
         "http://127.0.0.1:8080",   # IPv4 localhost alternative
-        "https://deepread.vercel.app",  # Production domain
+        "https://deepread.vercel.app",  # Production domain Vercel
+        "https://deepread.onrender.com",  # Production domain Render
         "*"  # Permitir todas las solicitudes en desarrollo
     ],
     allow_credentials=True,

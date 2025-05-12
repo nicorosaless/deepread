@@ -5,9 +5,21 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Determinar la URL base según el entorno
-const isDevelopment = import.meta.env.DEV;
-const BASE_URL = isDevelopment ? "http://localhost:8000" : "";
+// Determinar la URL base según el entorno y el dominio actual
+function determineBaseUrl() {
+  const isDevelopment = import.meta.env.DEV;
+  if (isDevelopment) {
+    return "http://localhost:8000";
+  }
+
+  const currentDomain = window.location.hostname;
+  
+  // No agregamos prefijo en producción - las solicitudes se hacen relativamente
+  // Esto permite que funcione en cualquier dominio (Vercel, Render, etc.)
+  return "";
+}
+
+const BASE_URL = determineBaseUrl();
 
 export async function apiFetch(endpoint: string, options?: RequestInit) {
   const response = await fetch(`${BASE_URL}${endpoint}`, {
