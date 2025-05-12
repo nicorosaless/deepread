@@ -13,10 +13,9 @@ function determineBaseUrl() {
   }
 
   const currentDomain = window.location.hostname;
-  
-  // No agregamos prefijo en producción - las solicitudes se hacen relativamente
-  // Esto permite que funcione en cualquier dominio (Vercel, Render, etc.)
-  return "https://deepreadbackend.vercel.app";
+
+  // Cambiar para usar una variable de entorno en lugar de una URL fija
+  return import.meta.env.VITE_API_BASE_URL || "https://deepreadbackend.vercel.app";
 }
 
 const BASE_URL = determineBaseUrl();

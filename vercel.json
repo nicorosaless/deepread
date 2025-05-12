@@ -29,5 +29,11 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/backend/main.py"
+    }
   ]
 }
