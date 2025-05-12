@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -58,7 +57,7 @@ const Login = () => {
         <CardHeader>
           <CardTitle>Login</CardTitle>
           <CardDescription>
-            Enter your email and password to sign in to your account
+            Access your account
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

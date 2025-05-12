@@ -90,7 +90,9 @@ const DialogTitle = React.forwardRef<
       className
     )}
     {...props}
-  />
+  >
+    Confirmation
+  </DialogPrimitive.Title>
 ))
 DialogTitle.displayName = DialogPrimitive.Title.displayName
 
@@ -102,7 +104,9 @@ const DialogDescription = React.forwardRef<
     ref={ref}
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
-  />
+  >
+    Are you sure you want to proceed?
+  </DialogPrimitive.Description>
 ))
 DialogDescription.displayName = DialogPrimitive.Description.displayName
 

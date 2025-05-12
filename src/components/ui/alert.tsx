@@ -40,7 +40,9 @@ const AlertTitle = React.forwardRef<
     ref={ref}
     className={cn("mb-1 font-medium leading-none tracking-tight", className)}
     {...props}
-  />
+  >
+    Error
+  </h5>
 ))
 AlertTitle.displayName = "AlertTitle"
 
@@ -52,7 +54,9 @@ const AlertDescription = React.forwardRef<
     ref={ref}
     className={cn("text-sm [&_p]:leading-relaxed", className)}
     {...props}
-  />
+  >
+    An unexpected error occurred. Please try again.
+  </div>
 ))
 AlertDescription.displayName = "AlertDescription"
 

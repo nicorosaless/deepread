@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -59,7 +58,7 @@ const Register = () => {
         <CardHeader>
           <CardTitle>Register</CardTitle>
           <CardDescription>
-            Create an account to use Deepread
+            Create an account to use DeepRead
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

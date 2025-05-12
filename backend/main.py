@@ -260,7 +260,7 @@ async def register(user: UserCreate):
             "password": hashed_password.decode('utf-8'),
             "name": user.name,
             "created_at": datetime.utcnow(),
-            "credits": 1000  # Initial credits for new user (integer)
+            "credits": 500  # Initial credits for new user (integer)
         }
         
         try:

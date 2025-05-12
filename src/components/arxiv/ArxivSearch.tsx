@@ -101,11 +101,11 @@ const ArxivSearch: React.FC<ArxivSearchProps> = ({ onPaperSelectedForDeepRead })
     <div className="space-y-6">
       <form onSubmit={handleSearch} className="space-y-4 p-4 border rounded-lg shadow-sm bg-card">
         <div>
-          <Label htmlFor="search-query" className="text-base font-medium">Buscar en ArXiv</Label>
+          <Label htmlFor="search-query" className="text-base font-medium">Search ArXiv</Label>
           <div className="relative mt-1">
             <Input
               id="search-query"
-              placeholder="Buscar papers de IA (ej: transformers, diffusion models)..."
+              placeholder="Search AI papers (e.g., transformers, diffusion models)..."
               className="pl-10 pr-4 py-2 text-base"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -117,17 +117,17 @@ const ArxivSearch: React.FC<ArxivSearchProps> = ({ onPaperSelectedForDeepRead })
         {/* Filtros adicionales - Solo Categoría y Período */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="category" className="text-sm font-medium">Categoría</Label>
+            <Label htmlFor="category" className="text-sm font-medium">Category</Label>
             <Select
               value={selectedCategory}
               onValueChange={setSelectedCategory}
             >
               <SelectTrigger id="category" className="h-10 text-sm mt-1">
-                <SelectValue placeholder="Todas las categorías" />
+                <SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="all">Todas las categorías</SelectItem>
+                  <SelectItem value="all">All categories</SelectItem>
                   {categories.map(category => (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
@@ -139,7 +139,7 @@ const ArxivSearch: React.FC<ArxivSearchProps> = ({ onPaperSelectedForDeepRead })
           </div>
           
           <div>
-            <Label htmlFor="timeframe" className="text-sm font-medium">Período</Label>
+            <Label htmlFor="timeframe" className="text-sm font-medium">Timeframe</Label>
             <Select
               value={selectedTimeframe}
               onValueChange={setSelectedTimeframe}
@@ -164,12 +164,12 @@ const ArxivSearch: React.FC<ArxivSearchProps> = ({ onPaperSelectedForDeepRead })
           {loading ? (
             <>
               <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
-              <span>Buscando...</span>
+              <span>Searching...</span>
             </>
           ) : (
             <>
               <Search className="h-4 w-4" />
-              <span>Buscar Papers</span>
+              <span>Search Papers</span>
             </>
           )}
         </Button>
@@ -185,7 +185,7 @@ const ArxivSearch: React.FC<ArxivSearchProps> = ({ onPaperSelectedForDeepRead })
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error en la búsqueda</AlertTitle>
-          <AlertDescription className="mb-2">{error}</AlertDescription>
+          <AlertDescription className="mb-2">There was an error. Please try again.</AlertDescription>
           <Button 
             variant="outline" 
             size="sm" 
@@ -214,15 +214,15 @@ const ArxivSearch: React.FC<ArxivSearchProps> = ({ onPaperSelectedForDeepRead })
 
       {papers.length === 0 && !error && lastSearchQuery && !loading && (
         <div className="text-center p-8 border rounded-lg bg-card mt-4">
-          <p className="text-muted-foreground">No se encontraron resultados para "<span className="font-medium">{lastSearchQuery}</span>"</p>
-          <p className="text-sm text-muted-foreground mt-2">Intenta con otros términos de búsqueda</p>
+          <p className="text-muted-foreground">No results found for "<span className="font-medium">{lastSearchQuery}</span>"</p>
+          <p className="text-sm text-muted-foreground mt-2">Try different search terms</p>
         </div>
       )}
 
       {!papers.length && !error && !lastSearchQuery && !loading && (
         <div className="text-center p-8 border rounded-lg bg-muted/30 mt-4">
-          <p className="font-medium">Ingresa un término de búsqueda para encontrar papers científicos</p>
-          <p className="text-sm text-muted-foreground mt-2">Busca por temas como "transformers", "deep learning", etc.</p>
+          <p className="font-medium">Enter a search term to find scientific papers</p>
+          <p className="text-sm text-muted-foreground mt-2">Search for topics like "transformers", "deep learning", etc.</p>
         </div>
       )}
     </div>

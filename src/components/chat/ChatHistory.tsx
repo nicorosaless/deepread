@@ -10,6 +10,7 @@ interface ChatHistoryProps {
   processingStage: string;
   handleFileSelected: (file: File) => Promise<void>;
   messagesEndRef: React.RefObject<HTMLDivElement>;
+  onShowArxivSearch: () => void;
 }
 
 const ChatHistory: React.FC<ChatHistoryProps> = ({
@@ -18,6 +19,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   processingStage,
   handleFileSelected,
   messagesEndRef,
+  onShowArxivSearch,
 }) => {
   return (
     <ScrollArea className="flex-1 px-4">
@@ -25,7 +27,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
         <div className="flex flex-col items-center justify-center h-full py-12 text-center">
           <h2 className="text-2xl font-semibold mb-2">Welcome to DeepRead</h2>
           <p className="text-muted-foreground mb-6 max-w-md">
-            Upload a PDF of an arXiv paper to get started. I'll analyze it and provide a summary and implementation suggestions.
+            Upload a PDF of an arXiv paper to get started, or visit the <button onClick={onShowArxivSearch} className="text-blue-500 underline">ArXiv Search</button> page. I'll analyze it and provide a summary and implementation suggestions.
           </p>
           <div className="w-full max-w-[240px]">
             <FileUploader

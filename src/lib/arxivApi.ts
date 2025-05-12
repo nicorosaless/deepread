@@ -291,21 +291,23 @@ function formatDate(date: Date): string {
   return `${year}${month}${day}`;
 }
 
-// Helper function to get the main AI categories in arXiv
-export const getArxivAICategories = (): { id: string, name: string }[] => [
-  { id: 'cs.AI', name: 'Inteligencia Artificial' },
-  { id: 'cs.LG', name: 'Aprendizaje Automático' },
-  { id: 'cs.CL', name: 'Procesamiento del Lenguaje Natural' },
-  { id: 'cs.CV', name: 'Visión por Computador' },
-  { id: 'cs.NE', name: 'Computación Neuronal y Evolutiva' },
-  { id: 'cs.RO', name: 'Robótica' },
-  { id: 'stat.ML', name: 'Estadística - Aprendizaje Automático' }
-];
+// Translate category and timeframe options to English
+export function getArxivAICategories() {
+  return [
+    { id: 'cs.AI', name: 'Artificial Intelligence' },
+    { id: 'cs.CL', name: 'Computation and Language' },
+    { id: 'cs.CV', name: 'Computer Vision and Pattern Recognition' },
+    { id: 'cs.LG', name: 'Machine Learning' },
+    { id: 'cs.NE', name: 'Neural and Evolutionary Computing' },
+    { id: 'cs.RO', name: 'Robotics' },
+  ];
+}
 
-// Opciones para el filtro de timeframe
-export const getTimeframeOptions = (): { id: string, name: string }[] => [
-  { id: 'all', name: 'Cualquier fecha' },
-  { id: 'last_week', name: 'Última semana' },
-  { id: 'last_month', name: 'Último mes' },
-  { id: 'last_year', name: 'Último año' },
-];
+export function getTimeframeOptions() {
+  return [
+    { id: 'all', name: 'All Timeframes' },
+    { id: 'last_week', name: 'Last Week' },
+    { id: 'last_month', name: 'Last Month' },
+    { id: 'last_year', name: 'Last Year' },
+  ];
+}

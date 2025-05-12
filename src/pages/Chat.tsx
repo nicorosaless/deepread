@@ -121,6 +121,7 @@ const Chat = () => {
                     processingStage={processingStage}
                     messagesEndRef={messagesEndRef}
                     handleFileSelected={handleFileSelected}
+                    onShowArxivSearch={showArxivSearch}
                   />
                 )}
                 

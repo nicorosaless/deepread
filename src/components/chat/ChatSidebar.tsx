@@ -47,7 +47,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
     <>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-sidebar-foreground">Deepread</h2> 
+          <h2 className="text-xl font-semibold text-sidebar-foreground">DeepRead</h2> 
           <Button 
             variant="ghost" 
             size="icon"
@@ -120,7 +120,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
               ))}
               {chatSessions.length === 0 && (
                 <p className="p-4 text-sm text-sidebar-foreground/70 text-center">
-                  Inicia un nuevo chat o explora ArXiv.
+                  Start a new chat or explore ArXiv.
                 </p>
               )}
             </SidebarMenu>
@@ -140,6 +140,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
             size="sm"
             className="w-full flex items-center justify-center gap-2 text-sidebar-foreground bg-sidebar-accent hover:bg-sidebar-accent/80 border-sidebar-border"
             onClick={handleSignOut}
+            title="Sign Out"
           >
             <LogOut className="h-4 w-4" />
             Sign Out

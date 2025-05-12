@@ -10,6 +10,8 @@ import Register from "./pages/Register";
 import Chat from "./pages/Chat";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ArxivSearchPage from "./pages/ArxivSearchPage"; // Import the new ArxivSearchPage
+import { I18nextProvider } from 'react-i18next';
+import i18n from '@/lib/i18n';
 
 const queryClient = new QueryClient();
 
@@ -19,39 +21,41 @@ const RootRedirect = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<RootRedirect />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route 
-              path="/chat" 
-              element={
-                <ProtectedRoute>
-                  <Chat />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/arxiv-search" // Add route for ArxivSearchPage
-              element={
-                <ProtectedRoute>
-                  <ArxivSearchPage />
-                </ProtectedRoute>
-              } 
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <I18nextProvider i18n={i18n}>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<RootRedirect />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route 
+                path="/chat" 
+                element={
+                  <ProtectedRoute>
+                    <Chat />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/arxiv-search" // Add route for ArxivSearchPage
+                element={
+                  <ProtectedRoute>
+                    <ArxivSearchPage />
+                  </ProtectedRoute>
+                } 
+              />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </I18nextProvider>
 );
 
 export default App;
