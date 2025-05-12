@@ -36,28 +36,55 @@ export async function registerUser(name: string, email: string, password: string
   return { token: data.access_token }; // Asegúrate de convertir access_token a token
 }
 
-export async function loginUser(email: string, password: string): Promise<{ token: string }> {
-  const response = await fetch(`${BASE_URL}/api/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
+export async function loginUser(email: string, password: string): Promise<{ token: string, user: UserData, processed_paper_messages?: any[] }> {
+  console.log('Intentando login con:', { email });
+  
+  try {
+    const response = await fetch(`${BASE_URL}/api/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    try {
-      const errorData = JSON.parse(errorText);
-      throw new Error(errorData.detail || 'Login failed');
-    } catch (parseError) {
-      // Si la respuesta no es JSON válido, usa el texto completo
-      throw new Error(`Login failed: ${errorText}`);
+    console.log('Respuesta del servidor login:', response.status, response.statusText);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error en login (texto completo):', errorText);
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.detail || 'Login failed');
+      } catch (parseError) {
+        console.error('Error al parsear respuesta de error:', parseError);
+        if (response.status === 503) {
+          throw new Error('Login failed: Database connection not available');
+        } else if (response.status >= 500) {
+          throw new Error(`Login failed: A server error has occurred (Status: ${response.status})`);
+        } else {
+          throw new Error(`Login failed: ${errorText || response.statusText}`);
+        }
+      }
     }
-  }
 
-  const data = await response.json();
-  return { token: data.access_token };
+    const data = await response.json();
+    console.log('Login exitoso, datos recibidos:', { 
+      token: data.access_token ? 'presente' : 'ausente',
+      user: data.user ? 'presente' : 'ausente'
+    });
+    
+    // Devolvemos un objeto con token, user y posiblemente processed_paper_messages
+    return { 
+      token: data.access_token,
+      user: data.user,
+      processed_paper_messages: data.processed_paper_messages
+    };
+  } catch (error) {
+    console.error('Error durante login:', error);
+    throw error;
+  }
 }
 
 export async function getUserProfile(token: string): Promise<UserData> {

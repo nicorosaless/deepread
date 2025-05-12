@@ -57,7 +57,35 @@ JWT_EXPIRATION_DELTA = timedelta(days=7)
 
 # Models
 # SUMMARY_MODEL and CODE_MODEL are no longer needed as we'll use Google's model directly
-GOOGLE_MODEL_NAME = "gemini-2.0-flash" # Changed from 2.0-flash to 1.5-flash
+GOOGLE_MODEL_NAME = "gemini-2.0-flash" # Cambio a 1.5-flash para asegurar compatibilidad
+
+# Crear la instancia de FastAPI antes de definir modelos y rutas
+app = FastAPI(title="DeepRead API")
+
+# CORS Configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8080",  # Frontend dev server
+        "http://127.0.0.1:8080",   # IPv4 localhost alternative
+        "https://deepread.vercel.app",  # Production domain
+        "*"  # Permitir todas las solicitudes en desarrollo
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Agregar manejador global de excepciones
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    print(f"Error global capturado: {type(exc).__name__}: {str(exc)}")
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"}
+    )
 
 # Nuevos modelos para la funcionalidad de chat (MOVED UP)
 class ChatMessage(BaseModel):
