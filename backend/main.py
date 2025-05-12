@@ -27,46 +27,19 @@ text = ""
 # Cargar variables de entorno
 load_dotenv()
 
+# Configuración de MongoDB - Mejorada para mayor robustez
 MONGODB_URI = os.getenv("MONGODB_URI")
+# Valor de respaldo en caso de que la variable de entorno no esté disponible
+if not MONGODB_URI:
+    print("ADVERTENCIA: Variable MONGODB_URI no encontrada. Usando URL por defecto.")
+    MONGODB_URI = "mongodb+srv://nirogo06:heyho@cluster0.ythepr9.mongodb.net/"
+
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY:
+    print("ADVERTENCIA: Variable GOOGLE_API_KEY no encontrada. La funcionalidad de AI puede estar limitada.")
 
-# Asegúrate de que las variables estén configuradas
-if not MONGODB_URI or not GOOGLE_API_KEY:
-    raise ValueError("Missing required environment variables: MONGODB_URI or GOOGLE_API_KEY")
-
-# Configuración para poder usar ambos clientes de IA según disponibilidad
-
-try:
-    from groq import Groq
-    has_groq = True
-except ImportError:
-    has_groq = False
-
-app = FastAPI(title="DeepRead API")
-
-# Agregar manejador global de excepciones
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Internal server error: {str(exc)}"}
-    )
-
-# CORS Configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",  # Frontend dev server
-        "http://127.0.0.1:8080",   # IPv4 localhost alternative
-        "https://deepread.vercel.app"  # Production domain
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# MongoDB Connection (opcional)
-MONGODB_URL = os.getenv("MONGODB_URI", "mongodb+srv://nirogo06:heyho@cluster0.ythepr9.mongodb.net/")
+# MongoDB Connection (usaremos la variable MONGODB_URI definida arriba)
+MONGODB_URL = MONGODB_URI
 DATABASE_NAME = "DeepRead"
 USERS_COLLECTION = "users"
 CHAT_SESSIONS_COLLECTION = "chat_sessions" # ADDED

@@ -5,7 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-const BASE_URL = "https://deepread.vercel.app";
+// Determinar la URL base según el entorno
+const isDevelopment = import.meta.env.DEV;
+const BASE_URL = isDevelopment ? "http://localhost:8000" : "";
 
 export async function apiFetch(endpoint: string, options?: RequestInit) {
   const response = await fetch(`${BASE_URL}${endpoint}`, {
