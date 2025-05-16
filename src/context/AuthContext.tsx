@@ -81,17 +81,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (token: string) => {
+    console.log('Login: Setting token in localStorage');
     localStorage.setItem('auth_token', token);
-    const user = await fetchUserProfile(token);
-    if (user) {
+    
+    try {
+      console.log('Login: Fetching user profile');
+      const user = await fetchUserProfile(token);
+      
+      if (user) {
+        console.log(`Login: User profile fetched successfully for ${user.name}`);
+        toast({
+          title: "Login successful",
+          description: `Welcome back, ${user.name}!`,
+        });
+      }
+      
+      console.log('Login: Loading processed paper messages');
+      const processedMessagesString = localStorage.getItem('processedPaperMessages');
+      const processedPaperMessages = processedMessagesString ? JSON.parse(processedMessagesString) : [];
+      setAuthState(prevState => ({ ...prevState, processedPaperMessages }));
+      
+      console.log('Login process completed successfully');
+    } catch (error) {
+      console.error('Login: Error during profile fetch or state update:', error);
       toast({
-        title: "Login successful",
-        description: `Welcome back, ${user.name}!`,
+        title: "Warning",
+        description: "Logged in but had trouble loading your profile. Some features may be limited.",
+        variant: "destructive",
       });
     }
-    const processedMessagesString = localStorage.getItem('processedPaperMessages');
-    const processedPaperMessages = processedMessagesString ? JSON.parse(processedMessagesString) : [];
-    setAuthState(prevState => ({ ...prevState, processedPaperMessages }));
   };
 
   const register = async (name: string, email: string, password: string): Promise<void> => {

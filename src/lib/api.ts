@@ -1,7 +1,9 @@
 import { PaperData, ProcessedPaper, UserData, ChatSession } from "./types";
-import BASE_URL from "./utils";
+import { apiConfig } from "@/config";
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// Use centralized config
+const BASE_URL = apiConfig.baseUrl;
+const API_URL = BASE_URL; // Keep API_URL for backward compatibility
 
 export interface ChatMessage {
   id: string;
@@ -13,12 +15,12 @@ export interface ChatMessage {
 
 // Authentication API
 export async function registerUser(name: string, email: string, password: string): Promise<{ token: string }> {
-  const response = await fetch(`${BASE_URL}/api/register`, {
+  const response = await fetch(`${BASE_URL}${apiConfig.auth.register}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name, email, password }),
+    body: JSON.stringify({ username: name, email, password }),
   });
 
   if (!response.ok) {
@@ -40,7 +42,10 @@ export async function loginUser(email: string, password: string): Promise<{ toke
   console.log('Intentando login con:', { email });
   
   try {
-    const response = await fetch(`${BASE_URL}/api/login`, {
+    // Log the exact URL we're using for login
+    console.log(`Login URL: ${BASE_URL}${apiConfig.auth.login}`);
+    
+    const response = await fetch(`${BASE_URL}${apiConfig.auth.login}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -59,7 +64,9 @@ export async function loginUser(email: string, password: string): Promise<{ toke
         throw new Error(errorData.detail || 'Login failed');
       } catch (parseError) {
         console.error('Error al parsear respuesta de error:', parseError);
-        if (response.status === 503) {
+        if (response.status === 404) {
+          throw new Error('Login failed: Endpoint not found. Please check API URL configuration.');
+        } else if (response.status === 503) {
           throw new Error('Login failed: Database connection not available');
         } else if (response.status >= 500) {
           throw new Error(`Login failed: A server error has occurred (Status: ${response.status})`);
@@ -88,7 +95,7 @@ export async function loginUser(email: string, password: string): Promise<{ toke
 }
 
 export async function getUserProfile(token: string): Promise<UserData> {
-  const response = await fetch(`${BASE_URL}/api/user`, {
+  const response = await fetch(`${BASE_URL}/api/auth/user`, {
     headers: {
       'Authorization': `Bearer ${token}`,
     },

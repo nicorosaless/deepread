@@ -51,14 +51,31 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
   };
 
   return (
-    <div className="border-t py-6">
-      <div className="container max-w-4xl mx-auto space-y-6">
-        <Tabs defaultValue="summary" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="summary">Summary</TabsTrigger>
-            <TabsTrigger value="code">Code Implementation</TabsTrigger>
-          </TabsList>
-          
+    <div className="border-t"> {/* Reverted border color */}
+      <Tabs defaultValue="summary" className="w-full">
+        {/* TabsList container */}
+        <div className="border-b"> {/* Reverted border color */}
+          {/* Centering container for TabsList */}
+          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"> 
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger 
+                value="summary"
+                className="" // Removed blue active state
+              >
+                Summary
+              </TabsTrigger>
+              <TabsTrigger 
+                value="code"
+                className="" // Removed blue active state
+              >
+                Code Implementation
+              </TabsTrigger>
+            </TabsList>
+          </div>
+        </div>
+
+        {/* TabsContent container */}
+        <div className="container max-w-4xl mx-auto py-6 space-y-6">
           <TabsContent value="summary">
             <section>
               {/* <h2 className="text-2xl font-semibold mb-6">Summary & Analysis</h2> */}
@@ -73,11 +90,11 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
           
           <TabsContent value="code">
             <section>
-              <h2 className="text-2xl font-semibold mb-6">Code Implementation & Project Ideas</h2>
+              <h2 className="text-2xl font-semibold mb-6">Code Implementation & Project Ideas</h2> {/* Reverted text color */}
               {processedData.projectSuggestions && processedData.projectSuggestions.length > 0 ? (
                 processedData.projectSuggestions.map((suggestion, sIdx) => (
-                  <div key={sIdx} className="mb-8 p-4 border rounded-lg shadow-sm bg-card">
-                    <h3 className="text-xl font-semibold mb-2 text-card-foreground">{suggestion.title}</h3>
+                  <div key={sIdx} className="mb-8 p-4 border rounded-lg shadow-sm bg-card"> {/* Reverted border for cards */}
+                    <h3 className="text-xl font-semibold mb-2 text-card-foreground">{suggestion.title}</h3> {/* Reverted text color */}
                     <p className="text-muted-foreground mb-4 whitespace-pre-line">{suggestion.description}</p>
                     {suggestion.codeImplementation && suggestion.codeImplementation.length > 0 ? (
                       suggestion.codeImplementation.map((file: CodeFile, fIdx: number) => (
@@ -93,17 +110,17 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
               )}
             </section>
           </TabsContent>
-        </Tabs>
-        
-        <div className="fixed bottom-6 right-6">
-          <Button
-            onClick={scrollToTop}
-            size="icon"
-            className="rounded-full shadow-lg"
-          >
-            <ArrowUp className="h-5 w-5" />
-          </Button>
         </div>
+      </Tabs>
+      
+      <div className="fixed bottom-6 right-6">
+        <Button
+          onClick={scrollToTop}
+          size="icon"
+          className="rounded-full shadow-lg" // Removed blue background and white text
+        >
+          <ArrowUp className="h-5 w-5" />
+        </Button>
       </div>
     </div>
   );

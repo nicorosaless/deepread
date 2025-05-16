@@ -1,24 +1,13 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { apiConfig } from "@/config"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Determinar la URL base según el entorno y el dominio actual
-function determineBaseUrl() {
-  const isDevelopment = import.meta.env.DEV;
-  if (isDevelopment) {
-    return "http://localhost:8000";
-  }
-
-  const currentDomain = window.location.hostname;
-
-  // Cambiar para usar una variable de entorno en lugar de una URL fija
-  return import.meta.env.VITE_API_BASE_URL || "https://deepreadbackend.vercel.app";
-}
-
-const BASE_URL = determineBaseUrl();
+// Base URL from config
+const BASE_URL = apiConfig.baseUrl;
 
 export async function apiFetch(endpoint: string, options?: RequestInit) {
   // Usar el constructor URL para unir BASE_URL y endpoint de forma segura
