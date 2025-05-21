@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   Card, 
@@ -27,7 +28,7 @@ const ProjectSuggestions: React.FC<ProjectSuggestionsProps> = ({ projects }) => 
   
   const handleDownloadZip = async (project: ProjectSuggestion) => {
     if (!project || !project.codeImplementation || project.codeImplementation.length === 0) {
-      console.warn("No code files to download for this project.");
+      console.warn("No hay archivos de código para descargar en este proyecto.");
       return;
     }
 
@@ -40,7 +41,7 @@ const ProjectSuggestions: React.FC<ProjectSuggestionsProps> = ({ projects }) => 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       saveAs(zipBlob, `${project.title.replace(/\s+/g, '_')}_code.zip`);
     } catch (error) {
-      console.error("Error creating ZIP file:", error);
+      console.error("Error al crear el archivo ZIP:", error);
     }
   };
 
@@ -48,15 +49,14 @@ const ProjectSuggestions: React.FC<ProjectSuggestionsProps> = ({ projects }) => 
     <Card className="w-full bg-[#121212] border-0 shadow-lg overflow-hidden">
       <CardHeader className="bg-[#1e1e1e] text-white py-4 px-6 border-b border-[#333]">
         <div className="flex items-center gap-2">
-          <ChevronLeftIcon className="h-5 w-5" />
-          <ChevronRightIcon className="h-5 w-5" />
-          <CardTitle className="text-xl">Implementation Projects</CardTitle>
+          <Code className="h-5 w-5" />
+          <CardTitle className="text-xl">Proyectos de Implementación</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="pt-6 bg-[#121212] text-white">
         {projects.length === 0 ? (
           <div className="text-center py-8 text-gray-400">
-            No project suggestions available
+            No hay sugerencias de proyectos disponibles
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -85,7 +85,7 @@ const ProjectSuggestions: React.FC<ProjectSuggestionsProps> = ({ projects }) => 
                         onClick={() => handleDownloadZip(project)}
                       >
                         <Download className="h-4 w-4 mr-1" />
-                        Download All as ZIP
+                        Descargar todo como ZIP
                       </Button>
                     )}
                   </div>

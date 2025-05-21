@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import ChatSidebar from '@/components/chat/ChatSidebar';
@@ -6,14 +7,18 @@ import PaperAnalysis from '@/components/chat/PaperAnalysis';
 import { useChatSessions } from '@/components/chat/useChatSessions';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Coins } from 'lucide-react';
+import { Coins, MessageSquare } from 'lucide-react';
 import ProcessedPapersDisplay from '@/components/chat/ProcessedPapersDisplay'; 
 import ArxivSearch from '@/components/arxiv/ArxivSearch';
-import { ArxivPaper } from '@/lib/types'; // Importar ArxivPaper
-import LoadingState from '@/components/LoadingState'; // Import the LoadingState component
+import { ArxivPaper } from '@/lib/types';
+import LoadingState from '@/components/LoadingState';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 
 const Chat = () => {
   const [isArxivSearchActive, setIsArxivSearchActive] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("content");
+  const [chatMessage, setChatMessage] = useState<string>("");
 
   const {
     isProcessing,
@@ -24,12 +29,12 @@ const Chat = () => {
     currentPaperData,
     currentProcessedData,
     isLoadingSessions,
-    isAutoProcessing, // Obtener el nuevo estado
+    isAutoProcessing,
     handleNewChat,
     handleSessionSelect,
     handleFileSelected,
-    handleNewChatWithArxivPaper, // Obtener la nueva función
-    deleteChatSession, // Add deleteChatSession to destructured props
+    handleNewChatWithArxivPaper,
+    deleteChatSession,
   } = useChatSessions();
   const { user } = useAuth();
   
@@ -61,13 +66,21 @@ const Chat = () => {
 
   const handleNewChatAndHideArxiv = () => {
     setIsArxivSearchActive(false);
-    handleNewChat(); // Llama a handleNewChat sin argumentos para un chat normal
+    handleNewChat();
   }
 
-  // Nueva función para manejar la selección de paper desde ArxivSearch
   const handlePaperSelectedFromArxiv = (paper: ArxivPaper) => {
-    setIsArxivSearchActive(false); // Ocultar la vista de búsqueda de ArXiv
-    handleNewChatWithArxivPaper(paper); // Llamar a la función del hook para crear y procesar
+    setIsArxivSearchActive(false);
+    handleNewChatWithArxivPaper(paper);
+  };
+
+  const handleChatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (chatMessage.trim()) {
+      // Aquí implementarías la lógica para enviar el mensaje al chatbot
+      console.log("Mensaje enviado:", chatMessage);
+      setChatMessage("");
+    }
   };
 
   return (
@@ -80,7 +93,7 @@ const Chat = () => {
             handleSessionSelect={hideArxivSearchAndSelectSession} 
             handleNewChat={handleNewChatAndHideArxiv} 
             onShowArxivSearch={showArxivSearch} 
-            handleDeleteSession={deleteChatSession} // Pass deleteChatSession to ChatSidebar
+            handleDeleteSession={deleteChatSession}
           />
         </Sidebar>
         
@@ -89,7 +102,7 @@ const Chat = () => {
             <div className="flex justify-end p-3 border-b border-border">
               <Button variant="outline" size="sm" className="text-foreground border-border hover:bg-accent">
                 <Coins className="h-4 w-4 mr-2" />
-                Credits: {user?.credits ?? 0}
+                Créditos: {user?.credits ?? 0}
               </Button>
             </div>
           )}
@@ -99,46 +112,93 @@ const Chat = () => {
               <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
                 <div className="max-w-4xl mx-auto">
                   <h1 className="text-2xl font-semibold mb-6">Explorar ArXiv</h1>
-                  <ArxivSearch onPaperSelectedForDeepRead={handlePaperSelectedFromArxiv} /> {/* Pasar la nueva prop */}
+                  <ArxivSearch onPaperSelectedForDeepRead={handlePaperSelectedFromArxiv} />
                 </div>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto flex flex-col p-4 md:p-6"> {/* Scrollable area for chat content */}
-                {isLoadingSessions || isAutoProcessing ? ( // Mostrar loading si carga sesiones o auto-procesa
+              <div className="flex-1 overflow-y-auto flex flex-col p-4 md:p-6">
+                {isLoadingSessions || isAutoProcessing ? (
                   <div className="flex items-center justify-center h-full">
                     <LoadingState 
                       message={
                         isAutoProcessing 
-                          ? processingStage || 'Processing ArXiv paper...'
-                          : 'Loading chats...'
+                          ? processingStage || 'Procesando paper de ArXiv...'
+                          : 'Cargando chats...'
                       }
                     />
                   </div>
                 ) : (
-                  <ChatHistory 
-                    messages={currentSession.messages}
-                    isProcessing={isProcessing} // isProcessing normal para subida de archivos
-                    processingStage={processingStage}
-                    messagesEndRef={messagesEndRef}
-                    handleFileSelected={handleFileSelected}
-                    onShowArxivSearch={showArxivSearch}
-                  />
-                )}
-                
-                {/* PaperAnalysis and ProcessedPapersDisplay MOVED INSIDE the scrollable area */}
-                {!isAutoProcessing && (currentPaperData || currentProcessedData) && (
-                  <div className="mt-4"> {/* Added margin-top for spacing */}
-                    <PaperAnalysis 
-                      paperData={currentPaperData}
-                      processedData={currentProcessedData}
-                      scrollToTop={scrollToTop} // Consider if scrollToTop is still needed here or if scroll focuses on new content
-                    />
-                  </div>
-                )}
-                {!isAutoProcessing && (
-                  <div className="mt-4"> {/* Added margin-top for spacing */}
-                    <ProcessedPapersDisplay />
-                  </div>
+                  <Tabs
+                    value={activeTab}
+                    onValueChange={setActiveTab}
+                    className="w-full"
+                  >
+                    <TabsList className="grid w-full grid-cols-3 mb-6">
+                      <TabsTrigger value="content">Contenido</TabsTrigger>
+                      {currentPaperData && <TabsTrigger value="chat">Chat</TabsTrigger>}
+                      <TabsTrigger value="history">Historial</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="content" className="flex-1">
+                      <ChatHistory 
+                        messages={currentSession.messages}
+                        isProcessing={isProcessing}
+                        processingStage={processingStage}
+                        messagesEndRef={messagesEndRef}
+                        handleFileSelected={handleFileSelected}
+                        onShowArxivSearch={showArxivSearch}
+                      />
+                      
+                      {!isAutoProcessing && (currentPaperData || currentProcessedData) && (
+                        <div className="mt-4">
+                          <PaperAnalysis 
+                            paperData={currentPaperData}
+                            processedData={currentProcessedData}
+                            scrollToTop={scrollToTop}
+                          />
+                        </div>
+                      )}
+                    </TabsContent>
+                    
+                    <TabsContent value="chat" className="flex-1 flex flex-col h-full">
+                      {currentPaperData && (
+                        <>
+                          <div className="flex-1 overflow-y-auto mb-4 border rounded-lg p-4">
+                            <h3 className="font-medium mb-2">Preguntas sobre {currentPaperData.title}</h3>
+                            <p className="text-muted-foreground text-sm mb-4">
+                              Haz preguntas específicas sobre este paper o solicita aclaraciones sobre la implementación del código.
+                            </p>
+                            
+                            <div className="space-y-4 py-4">
+                              {/* Aquí se mostrarían los mensajes del chat */}
+                              <div className="bg-muted p-3 rounded-lg">
+                                <p className="text-sm italic text-muted-foreground">
+                                  No hay mensajes aún. Comienza la conversación haciendo una pregunta.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <form onSubmit={handleChatSubmit} className="flex gap-2">
+                            <Textarea 
+                              value={chatMessage}
+                              onChange={(e) => setChatMessage(e.target.value)}
+                              placeholder="Escribe tu pregunta sobre el paper..."
+                              className="flex-1"
+                            />
+                            <Button type="submit">
+                              <MessageSquare className="h-4 w-4 mr-2" />
+                              Enviar
+                            </Button>
+                          </form>
+                        </>
+                      )}
+                    </TabsContent>
+                    
+                    <TabsContent value="history">
+                      <ProcessedPapersDisplay />
+                    </TabsContent>
+                  </Tabs>
                 )}
               </div>
             )}
