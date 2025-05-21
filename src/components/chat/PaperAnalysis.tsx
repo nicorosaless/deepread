@@ -27,8 +27,6 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
           <PaperSummary
             title={paperData.title || "Untitled Paper"}
             summary={processedData.summary}
-            authors={paperData.authors}
-            date={paperData.date}
           />
         </section>
 
