@@ -7,13 +7,14 @@ import { cn } from "@/lib/utils"
 const Separator = React.forwardRef<
   React.ElementRef<typeof SeparatorPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root>
->(({ className, ...props }, ref) => (
+>(({ className, orientation = "horizontal", decorative = true, ...props }, ref) => (
   <SeparatorPrimitive.Root
     ref={ref}
-    decorative={true}
-    orientation="horizontal"
+    decorative={decorative}
+    orientation={orientation}
     className={cn(
-      "shrink-0 bg-border h-[1px] w-full",
+      "shrink-0 bg-border",
+      orientation === "horizontal" ? "h-[1px] w-full" : "h-full w-[1px]",
       className
     )}
     {...props}

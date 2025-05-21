@@ -22,7 +22,14 @@ const resources = {
       "last_week": "Last Week",
       "last_month": "Last Month",
       "last_year": "Last Year",
-      "upload_pdf": "Upload a PDF of an arXiv paper or go to the ArXiv Search page"
+      "upload_pdf": "Upload a PDF of an arXiv paper or go to the ArXiv Search page",
+      "summary": "Summary",
+      "implementation": "Implementation",
+      "chatbot": "Chatbot",
+      "paper_summary": "Paper Summary",
+      "implementation_projects": "Implementation Projects",
+      "chatbot_assistant": "Chatbot Assistant",
+      "coming_soon": "This feature will be available soon. You'll be able to ask specific questions about the paper and get answers."
     }
   },
   es: {
@@ -43,7 +50,15 @@ const resources = {
       "all_timeframes": "Todos los periodos",
       "last_week": "Última semana",
       "last_month": "Último mes",
-      "last_year": "Último año"
+      "last_year": "Último año",
+      "upload_pdf": "Sube un PDF de un paper de ArXiv o ve a la página de Búsqueda de ArXiv",
+      "summary": "Resumen",
+      "implementation": "Implementación",
+      "chatbot": "Chatbot",
+      "paper_summary": "Resumen del Paper",
+      "implementation_projects": "Proyectos de Implementación",
+      "chatbot_assistant": "Chatbot Asistente",
+      "coming_soon": "Esta función estará disponible pronto. Podrás hacer preguntas específicas sobre el paper y recibir respuestas."
     }
   }
 };
@@ -52,7 +67,7 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: 'en', // Default language
+    lng: 'es', // Cambiado a español como idioma predeterminado
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false // React already escapes values

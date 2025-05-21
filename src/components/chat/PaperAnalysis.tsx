@@ -7,6 +7,7 @@ import PaperSummary from '@/components/PaperSummary';
 import ProjectSuggestions from '@/components/ProjectSuggestions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { useTranslation } from 'react-i18next';
 
 interface PaperAnalysisProps {
   paperData: PaperData | null;
@@ -19,6 +20,8 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
   processedData,
   scrollToTop
 }) => {
+  const { t } = useTranslation();
+  
   if (!paperData || !processedData) return null;
 
   return (
@@ -28,21 +31,21 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
           <TabsList className="w-full grid grid-cols-3 mb-8">
             <TabsTrigger value="summary" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Resumen
+              {t('summary')}
             </TabsTrigger>
             <TabsTrigger value="implementation" className="flex items-center gap-2">
               <Code className="h-4 w-4" />
-              Implementación
+              {t('implementation')}
             </TabsTrigger>
             <TabsTrigger value="chat" className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
-              Chatbot
+              {t('chatbot')}
             </TabsTrigger>
           </TabsList>
           
           <TabsContent value="summary" className="space-y-6">
             <section>
-              <h2 className="text-2xl font-semibold mb-6">Resumen & Análisis</h2>
+              <h2 className="text-2xl font-semibold mb-6">{t('paper_summary')}</h2>
               <PaperSummary
                 title={paperData.title || "Untitled Paper"}
                 summary={processedData.summary}
@@ -55,7 +58,7 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
           <TabsContent value="implementation" className="space-y-6">
             <section>
               <h2 className="text-2xl font-semibold mb-6">
-                Sugerencias de Implementación
+                {t('implementation_projects')}
               </h2>
               <ProjectSuggestions projects={processedData.projectSuggestions} />
             </section>
@@ -64,11 +67,11 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
           <TabsContent value="chat" className="space-y-6">
             <section>
               <h2 className="text-2xl font-semibold mb-6">
-                Chatbot Asistente
+                {t('chatbot_assistant')}
               </h2>
               <div className="bg-secondary/30 rounded-lg p-6 text-center">
                 <p className="text-muted-foreground">
-                  Esta función estará disponible pronto. Podrás hacer preguntas específicas sobre el paper y recibir respuestas.
+                  {t('coming_soon')}
                 </p>
               </div>
             </section>
