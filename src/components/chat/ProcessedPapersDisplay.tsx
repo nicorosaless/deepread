@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ChatMessage } from '@/lib/types'; // Ensure ChatMessage type is imported
+import { ChatMessage } from '@/lib/types';
 
 const ProcessedPapersDisplay: React.FC = () => {
   const { processedPaperMessages } = useAuth();
