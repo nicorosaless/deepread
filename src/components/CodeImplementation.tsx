@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check, Search } from 'lucide-react';
+import { Check, Code } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
 interface CodeFile {
@@ -20,8 +21,8 @@ const CodeImplementation: React.FC<CodeImplementationProps> = ({ codeFile, langu
   const handleCopyCode = () => {
     navigator.clipboard.writeText(codeFile.code);
     toast({
-      title: "Code copied to clipboard",
-      description: "The code has been copied to your clipboard",
+      title: "Código copiado al portapapeles",
+      description: "El código ha sido copiado a tu portapapeles",
       duration: 3000
     });
   };
@@ -30,8 +31,8 @@ const CodeImplementation: React.FC<CodeImplementationProps> = ({ codeFile, langu
     <div className="space-y-2 my-4">
       <div className="flex justify-between items-center text-white">
         <div className="flex items-center">
-          <span className="text-sm font-semibold mr-2">File: {codeFile.filename}</span>
-          <span className="text-sm font-medium text-gray-400 mr-2">Language:</span>
+          <span className="text-sm font-semibold mr-2">Archivo: {codeFile.filename}</span>
+          <span className="text-sm font-medium text-gray-400 mr-2">Lenguaje:</span>
           <span className="text-sm text-gray-200">{language}</span>
         </div>
         <div className="flex gap-2">
@@ -41,7 +42,7 @@ const CodeImplementation: React.FC<CodeImplementationProps> = ({ codeFile, langu
             onClick={handleCopyCode}
             className="bg-transparent border border-[#444] text-gray-300 hover:bg-[#2a2a2a] hover:text-white"
           >
-            <Check className="h-4 w-4 mr-1" /> Copy Code
+            <Check className="h-4 w-4 mr-1" /> Copiar Código
           </Button>
         </div>
       </div>
