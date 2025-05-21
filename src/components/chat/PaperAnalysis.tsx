@@ -2,10 +2,11 @@
 import React from 'react';
 import { PaperData, ProcessedPaper } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, FileText, Code, MessageSquare } from 'lucide-react';
 import PaperSummary from '@/components/PaperSummary';
 import ProjectSuggestions from '@/components/ProjectSuggestions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 
 interface PaperAnalysisProps {
   paperData: PaperData | null;
@@ -22,30 +23,21 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
 
   return (
     <div className="border-t py-6">
-<<<<<<< HEAD
-      <div className="container max-w-4xl mx-auto space-y-10">
-        <section>
-          <h2 className="text-2xl font-semibold mb-6">Summary & Analysis</h2>
-          <PaperSummary
-            title={paperData.title || "Untitled Paper"}
-            summary={processedData.summary}
-          />
-        </section>
-
-        <Separator className="my-8" />
-        
-        <section>
-          <h2 className="text-2xl font-semibold mb-6">
-            Suggested Implementation Projects
-          </h2>
-          <ProjectSuggestions projects={processedData.projectSuggestions} />
-        </section>
-=======
       <div className="container max-w-4xl mx-auto">
         <Tabs defaultValue="summary" className="w-full">
-          <TabsList className="w-full grid grid-cols-2 mb-8">
-            <TabsTrigger value="summary">Resumen</TabsTrigger>
-            <TabsTrigger value="implementation">Implementación</TabsTrigger>
+          <TabsList className="w-full grid grid-cols-3 mb-8">
+            <TabsTrigger value="summary" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Resumen
+            </TabsTrigger>
+            <TabsTrigger value="implementation" className="flex items-center gap-2">
+              <Code className="h-4 w-4" />
+              Implementación
+            </TabsTrigger>
+            <TabsTrigger value="chat" className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Chatbot
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="summary" className="space-y-6">
@@ -68,8 +60,20 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
               <ProjectSuggestions projects={processedData.projectSuggestions} />
             </section>
           </TabsContent>
+          
+          <TabsContent value="chat" className="space-y-6">
+            <section>
+              <h2 className="text-2xl font-semibold mb-6">
+                Chatbot Asistente
+              </h2>
+              <div className="bg-secondary/30 rounded-lg p-6 text-center">
+                <p className="text-muted-foreground">
+                  Esta función estará disponible pronto. Podrás hacer preguntas específicas sobre el paper y recibir respuestas.
+                </p>
+              </div>
+            </section>
+          </TabsContent>
         </Tabs>
->>>>>>> bfc56d7d1c1fb9411fd5f2f591f073e7a9c97d69
         
         <div className="fixed bottom-6 right-6">
           <Button
