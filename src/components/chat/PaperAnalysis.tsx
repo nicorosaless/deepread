@@ -6,7 +6,6 @@ import { ArrowUp, FileText, Code, MessageSquare } from 'lucide-react';
 import PaperSummary from '@/components/PaperSummary';
 import ProjectSuggestions from '@/components/ProjectSuggestions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
 import { useTranslation } from 'react-i18next';
 
 interface PaperAnalysisProps {

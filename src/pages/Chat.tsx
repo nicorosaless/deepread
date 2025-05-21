@@ -149,14 +149,13 @@ const Chat = () => {
                         onShowArxivSearch={showArxivSearch}
                       />
                       
-                      {!isAutoProcessing && (currentPaperData || currentProcessedData) && (
-                        <div className="mt-4">
-                          <PaperAnalysis 
-                            paperData={currentPaperData}
-                            processedData={currentProcessedData}
-                            scrollToTop={scrollToTop}
-                          />
-                        </div>
+                      {/* Solo mostramos el PaperAnalysis cuando hay datos de un paper y no está en procesamiento automático */}
+                      {!isAutoProcessing && (currentPaperData && currentProcessedData) && (
+                        <PaperAnalysis 
+                          paperData={currentPaperData}
+                          processedData={currentProcessedData}
+                          scrollToTop={scrollToTop}
+                        />
                       )}
                     </TabsContent>
                     
