@@ -18,8 +18,11 @@ import uvicorn
 from dotenv import load_dotenv
 import math
 import tiktoken
-import google.generativeai as genai # Added Google AI import
-
+import time
+import traceback
+import secrets
+import google.generativeai as genai
+from google.generativeai.client import configure  # Import configure function for API key setup
 # Add a global 'text' variable with a default value
 # This is a defensive measure against the NameError
 text = ""
@@ -47,18 +50,11 @@ CHAT_MESSAGES_COLLECTION = "chat_messages" # ADDED
 CREDIT_LOGS_COLLECTION = "credit_logs" # ADDED to define the collection name
 
 # API Keys
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "") # Added Google API Key
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "") # API Key for Google Gemini
 
 # JWT Configuration
-JWT_SECRET = os.getenv("JWT_SECRET")
-if not JWT_SECRET:
-    # Genera un secreto aleatorio si JWT_SECRET no está configurado
-    import secrets
-    JWT_SECRET = secrets.token_hex(32)
-    print(f"ADVERTENCIA: JWT_SECRET no configurado en variables de entorno.")
-    print(f"Se ha generado un secreto temporal: {JWT_SECRET}")
-    print("IMPORTANTE: Este secreto cambiará en cada reinicio, invalidando tokens anteriores.")
+JWT_SECRET = os.getenv("JWT_SECRET") or secrets.token_hex(32)
+print(f"JWT_SECRET is set to: {JWT_SECRET}")
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DELTA = timedelta(days=7)
@@ -113,91 +109,44 @@ MAX_DB_CONNECT_RETRIES = 5  # Aumentado a 5 intentos
 DB_CONNECT_TIMEOUT = 15000  # 15 segundos de timeout para selección de servidor
 DB_SOCKET_TIMEOUT = 45000   # 45 segundos de timeout para operaciones de socket
 
+# Ensure MongoDB client and database are robustly handled
 @app.on_event("startup")
 async def startup_db_client():
     global client, db
-    connect_retries = 0
-    
-    while connect_retries < MAX_DB_CONNECT_RETRIES:
-        try:
-            print(f"[{connect_retries+1}/{MAX_DB_CONNECT_RETRIES}] Intentando conectar a MongoDB: {MONGODB_URL}")
-            # Configuración mejorada de cliente MongoDB con timeouts más largos
-            client = MongoClient(
-                MONGODB_URL,
-                serverSelectionTimeoutMS=DB_CONNECT_TIMEOUT,
-                socketTimeoutMS=DB_SOCKET_TIMEOUT,
-                connectTimeoutMS=30000,
-                retryWrites=True,
-                retryReads=True,
-                w="majority"  # Garantiza escritura en mayoría de nodos
-            )
-            
-            # Verificar la conexión de manera explícita
-            client.admin.command('ping')
-            print("Conexión a MongoDB establecida - Ping exitoso")
-            
-            db = client[DATABASE_NAME]
-            
-            # Crear índice para el email único
-            if USERS_COLLECTION in db.list_collection_names():
-                print(f"Colección {USERS_COLLECTION} existe, verificando índice")
-                indexes = list(db[USERS_COLLECTION].list_indexes())
-                has_email_index = any("email_1" in idx["name"] for idx in indexes)
-                if not has_email_index:
-                    print("Creando índice único para email")
-                    db[USERS_COLLECTION].create_index("email", unique=True)
-                else:
-                    print("Índice de email ya existe")
-            else:
-                print(f"Colección {USERS_COLLECTION} no existe, se creará al insertar el primer documento")
-                db[USERS_COLLECTION].create_index("email", unique=True)
-            
-            print("=== Inicialización de MongoDB completada con éxito ===")
-            break
-            
-        except Exception as e:
-            connect_retries += 1
-            error_type = type(e).__name__
-            error_msg = str(e)
-            print(f"Error conectando a MongoDB (intento {connect_retries}/{MAX_DB_CONNECT_RETRIES}): {error_type}: {error_msg}")
-            
-            # Si es el último intento, configuramos client y db como None
-            if connect_retries >= MAX_DB_CONNECT_RETRIES:
-                print("CRÍTICO: Máximo de intentos de conexión alcanzado. Base de datos no disponible.")
-                client = None
-                db = None
-            else:
-                # Incrementamos el tiempo de espera entre intentos
-                import time
-                wait_time = connect_retries * 2  # 2s, 4s, 6s, 8s
-                print(f"Esperando {wait_time} segundos antes del siguiente intento...")
-                time.sleep(wait_time)
-    
-    # Inicialización de clientes de IA
     try:
-        if GOOGLE_API_KEY:
-            try:
-                genai.configure(api_key=GOOGLE_API_KEY)
-                app.state.google_ai_client = genai.GenerativeModel(GOOGLE_MODEL_NAME)
-                print(f"Cliente Google AI inicializado con modelo: {GOOGLE_MODEL_NAME}")
-            except Exception as e:
-                print(f"Error al inicializar cliente Google AI: {e}")
-                app.state.google_ai_client = None
+        # Initialize MongoDB connection
+        client = MongoClient(MONGODB_URI)
+        if client:
+            client.admin.command('ping')  # Test connection
+            db = client[DATABASE_NAME]
+            print("MongoDB connection established.")
         else:
-            print("Google API Key no encontrada. Cliente Google AI no inicializado.")
-            app.state.google_ai_client = None
+            raise Exception("MongoDB client is None.")
             
-        # Inicialización de Groq si está disponible
-        if has_groq and GROQ_API_KEY:
-            try:
-                app.state.groq_client = Groq(api_key=GROQ_API_KEY)
-                print("Cliente Groq inicializado exitosamente")
-            except Exception as e:
-                print(f"Error al inicializar cliente Groq: {e}")
-                app.state.groq_client = None
+        # Initialize Google AI client
+        try:
+            # Configure API key and initialize Google generative model
+            configure(api_key=GOOGLE_API_KEY)
+            from google.generativeai.generative_models import GenerativeModel
+            model = GenerativeModel(GOOGLE_MODEL_NAME)
+            app.state.google_model = model
+            print(f"Google AI client initialized successfully with model: {GOOGLE_MODEL_NAME}")
+        except Exception as e:
+            print(f"Error initializing Google AI client: {e}")
+            traceback.print_exc()
+            app.state.google_model = None
+            
     except Exception as e:
-        print(f"Error al inicializar clientes de IA: {e}")
-        
+        print(f"Error connecting to MongoDB: {e}")
+        client = None
+        db = None
+
+# Handle cases where db or client is None
+def get_collection(collection_name):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection not available.")
+    return db[collection_name]
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     global client
@@ -306,15 +255,12 @@ async def get_current_user(authorization: Optional[str] = Header(None, alias="Au
 
 # Utility function to get appropriate AI client
 def get_ai_client():
-    """Returns the Google AI client if available, otherwise Groq (or raises error)."""
-    if hasattr(app.state, "google_ai_client") and app.state.google_ai_client:
-        print("Using Google AI client")
-        return {"client": app.state.google_ai_client, "type": "google"}
-    elif hasattr(app.state, "groq_client") and app.state.groq_client: # Fallback, can be removed if Google is sole provider
-        print("Warning: Google AI client not available, falling back to Groq.")
-        return {"client": app.state.groq_client, "type": "groq"}
+    """Returns the Google AI client or raises an error."""
+    if hasattr(app.state, "google_model") and app.state.google_model:
+        print("Using Google AI model")
+        return {"client": app.state.google_model, "type": "google"}
     else:
-        raise HTTPException(status_code=503, detail="No AI client available (Google or Groq).")
+        raise HTTPException(status_code=503, detail="Google AI client not available.")
 
 # Authentication Endpoints
 @app.post("/api/register", response_model=Token)
@@ -409,7 +355,7 @@ async def get_user(current_user: dict = Depends(get_current_user)):
 # PDF Processing Endpoint
 @app.post("/api/extract-pdf", response_model=PaperData)
 async def extract_pdf(file: UploadFile = File(...)):
-    if not file.filename.endswith(".pdf"):
+    if file.filename is None or not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
     
     try:
@@ -440,6 +386,7 @@ async def extract_pdf(file: UploadFile = File(...)):
                         if len(abstract_candidate) > 50: # Basic check for meaningful abstract
                             abstract = abstract_candidate[:4000] # Increased limit for abstract
 
+        title = file.filename.replace(".pdf", "") if file.filename else "Untitled"
         paper_data = PaperData(
             title=title,
             content=extracted_text[:300000]  # Usar la variable extraída, con límite aumentado
@@ -525,15 +472,6 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
         # Define label variable here to ensure it's available in scope
         label = "ArxivPaper"  # Default label for the paper
         
-        generation_config_summary = genai.types.GenerationConfig(
-            max_output_tokens=1024, # Increased for 300-500 words summary
-            temperature=0.3
-        )
-        generation_config_code = genai.types.GenerationConfig(
-            max_output_tokens=60000, 
-            temperature=0.5
-        )
-
         # 1. Generate summary
         # Full content for actual prompt
         summary_prompt_full_context = f"Title: {paper_data.title}\n"
@@ -555,23 +493,27 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
 
         try:
             if client_type == "google":
-                summary_response = await ai_client.generate_content_async(
-                    summary_prompt, 
-                    generation_config=generation_config_summary,
-                )
-                summary_text = summary_response.text
-            elif client_type == "groq":
-                summary_response_groq = ai_client.chat.completions.create(
-                    model="mixtral-8x7b-32768",
-                    messages=[
-                        {"role": "system", "content": "You are an AI assistant specialized in summarizing academic papers."},
-                        {"role": "user", "content": summary_prompt}
-                    ],
-                    temperature=0.3,
-                    max_tokens=1024, 
-                    top_p=0.3,
-                )
-                summary_text = summary_response_groq.choices[0].message.content
+                # Use the GenerativeModel class to generate content
+                if hasattr(app.state, "google_model") and app.state.google_model:
+                    model = app.state.google_model
+                else:
+                    # If model not available in app state, create a new one
+                    from google.generativeai.generative_models import GenerativeModel
+                    model = GenerativeModel(GOOGLE_MODEL_NAME)
+                
+                # Use generate_content instead of generate_content_async if there are issues
+                try:
+                    summary_response = await model.generate_content_async(
+                        summary_prompt
+                    )
+                    summary_text = summary_response.text
+                except AttributeError:
+                    # Fallback to synchronous version if async is not available
+                    print("Falling back to synchronous generate_content")
+                    summary_response = model.generate_content(
+                        summary_prompt
+                    )
+                    summary_text = summary_response.text
             else:
                 raise HTTPException(status_code=500, detail="Unsupported AI client type for summary.")
         except Exception as e_summary_ai: # Catch any exception from summary AI call
@@ -668,24 +610,27 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
 
         try:
             if client_type == "google":
-                code_response = await ai_client.generate_content_async(
-                    code_prompt, 
-                    generation_config=generation_config_code # Changed from generation_config_code.to_dict()
-                )
-                code_implementation_str = code_response.text
-            elif client_type == "groq":
-                code_response_groq = ai_client.chat.completions.create(
-                    model="mixtral-8x7b-32768",
-                    messages=[
-                        {"role": "system", "content": "You are an AI assistant that generates code implementations from academic papers in JSON format."},
-                        {"role": "user", "content": code_prompt}
-                    ],
-                    temperature=0.5,
-                    max_tokens=15000, 
-                    top_p=0.2,
-                    response_format={"type": "json_object"} 
-                )
-                code_implementation_str = code_response_groq.choices[0].message.content
+                # Use the GenerativeModel class to generate content
+                if hasattr(app.state, "google_model") and app.state.google_model:
+                    model = app.state.google_model
+                else:
+                    # If model not available in app state, create a new one
+                    from google.generativeai.generative_models import GenerativeModel
+                    model = GenerativeModel(GOOGLE_MODEL_NAME)
+                
+                # Use generate_content instead of generate_content_async if there are issues
+                try:
+                    code_response = await model.generate_content_async(
+                        code_prompt
+                    )
+                    code_implementation_str = code_response.text
+                except AttributeError:
+                    # Fallback to synchronous version if async is not available
+                    print("Falling back to synchronous generate_content for code generation")
+                    code_response = model.generate_content(
+                        code_prompt
+                    )
+                    code_implementation_str = code_response.text
             else:
                 raise HTTPException(status_code=500, detail="Unsupported AI client type for code generation.")
         except Exception as e_code_ai: # Catch any exception from code AI call
@@ -742,20 +687,20 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
                  raise ValueError("Parsed JSON is not a list or is an empty list.")
 
             for project_data in project_data_list:
-                if not isinstance(project_data, dict): 
+                if not isinstance(project_data, dict):
                     print(f"Skipping non-dict item in project list: {project_data}")
                     continue
 
                 raw_code_impl = project_data.get("codeImplementation", project_data.get("code"))
                 code_files = []
 
-                if isinstance(raw_code_impl, list): 
+                if isinstance(raw_code_impl, list):
                     for file_obj in raw_code_impl:
                         if isinstance(file_obj, dict) and "filename" in file_obj and "code" in file_obj:
                             code_files.append(CodeFile(filename=str(file_obj["filename"]), code=str(file_obj["code"])))
                         else:
                             print(f"Skipping malformed file object in codeImplementation list: {file_obj}")
-                elif isinstance(raw_code_impl, str): 
+                elif isinstance(raw_code_impl, str):
                     lang = project_data.get("language", "python").lower()
                     default_filename = f"script.{'py' if lang == 'python' else 'js' if lang == 'javascript' else 'txt'}"
                     code_files.append(CodeFile(filename=default_filename, code=raw_code_impl))
@@ -764,7 +709,7 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
                     print(f"Code implementation was present but not parsed into files. Raw: {raw_code_impl}")
                     code_files.append(CodeFile(filename="unparsed_code.txt", code=str(raw_code_impl)))
                 elif not code_files: # If no code files could be made at all
-                     code_files.append(CodeFile(filename="empty_script.txt", code="# Code generation failed, was empty, or format was not recognized."))
+                    code_files.append(CodeFile(filename="empty_script.txt", code="# Code generation failed, was empty, or format was not recognized."))
 
                 project_suggestions.append(
                     ProjectSuggestion(
@@ -774,7 +719,7 @@ async def process_paper(paper_data: PaperData, current_user: dict = Depends(get_
                         language=str(project_data.get("language", "Python"))
                     )
                 )
-            if not project_suggestions: 
+            if not project_suggestions:
                 raise ValueError("JSON was parsed, but no valid project data was processed into suggestions.")
 
         except Exception as e_json_parsing:
@@ -1066,7 +1011,10 @@ async def get_chat_sessions(current_user: dict = Depends(get_current_user)):
         
         # Función no asíncrona para obtener mensajes
         def get_messages_for_session(session_id):
-            messages_cursor = db[CHAT_MESSAGES_COLLECTION].find({"session_id": session_id}).sort("timestamp", 1) # UPDATED
+            if db is not None:
+                messages_cursor = db[CHAT_MESSAGES_COLLECTION].find({"session_id": ObjectId(session_id)}).sort("timestamp", 1) # UPDATED
+            else:
+                raise HTTPException(status_code=503, detail="Database connection not available")
             messages = []
             for msg in messages_cursor:
                 message = {
@@ -1132,7 +1080,7 @@ async def get_chat_session(session_id: str, current_user: dict = Depends(get_cur
         
         if not session:
             raise HTTPException(status_code=404, detail="Chat session not found")
-        
+    
         # Obtener todos los mensajes de la sesión
         messages_cursor = db[CHAT_MESSAGES_COLLECTION].find({"session_id": ObjectId(session_id)}).sort("timestamp", 1) # UPDATED
         messages = []
@@ -1221,7 +1169,8 @@ async def get_db_status():
     
     try:
         # Verificar la conexión a MongoDB
-        client.admin.command('ping')
+        if client:
+            client.admin.command('ping')
         
         # Obtener información sobre las colecciones
         collections = db.list_collection_names()
@@ -1312,16 +1261,10 @@ async def health_check():
     else:
         status["ai_services"]["google_ai"] = "not_configured"
         
-    if hasattr(app.state, "groq_client") and app.state.groq_client:
-        status["ai_services"]["groq"] = "configured"
-    else:
-        status["ai_services"]["groq"] = "not_configured"
-        
     # Verificar variables de entorno (sin mostrar valores sensibles)
     status["env_check"] = {
         "MONGODB_URI": "set" if MONGODB_URI else "missing",
         "GOOGLE_API_KEY": "set" if GOOGLE_API_KEY else "missing",
-        "GROQ_API_KEY": "set" if GROQ_API_KEY else "missing",
         "JWT_SECRET": "set" if JWT_SECRET != "your-secret-key" else "default_insecure_value"
     }
     

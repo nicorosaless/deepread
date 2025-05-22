@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { PaperData, ProcessedPaper } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -26,57 +25,15 @@ const PaperAnalysis: React.FC<PaperAnalysisProps> = ({
   return (
     <div className="border-t py-6">
       <div className="container max-w-4xl mx-auto">
-        <Tabs defaultValue="summary" className="w-full">
-          <TabsList className="w-full grid grid-cols-3 mb-8">
-            <TabsTrigger value="summary" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              {t('summary')}
-            </TabsTrigger>
-            <TabsTrigger value="implementation" className="flex items-center gap-2">
-              <Code className="h-4 w-4" />
-              {t('implementation')}
-            </TabsTrigger>
-            <TabsTrigger value="chat" className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              {t('chatbot')}
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="summary" className="space-y-6">
-            <section>
-              <h2 className="text-2xl font-semibold mb-6">{t('paper_summary')}</h2>
-              <PaperSummary
-                title={paperData.title || "Untitled Paper"}
-                summary={processedData.summary}
-                authors={paperData.authors}
-                date={paperData.date}
-              />
-            </section>
-          </TabsContent>
-          
-          <TabsContent value="implementation" className="space-y-6">
-            <section>
-              <h2 className="text-2xl font-semibold mb-6">
-                {t('implementation_projects')}
-              </h2>
-              <ProjectSuggestions projects={processedData.projectSuggestions} />
-            </section>
-          </TabsContent>
-          
-          <TabsContent value="chat" className="space-y-6">
-            <section>
-              <h2 className="text-2xl font-semibold mb-6">
-                {t('chatbot_assistant')}
-              </h2>
-              <div className="bg-secondary/30 rounded-lg p-6 text-center">
-                <p className="text-muted-foreground">
-                  {t('coming_soon')}
-                </p>
-              </div>
-            </section>
-          </TabsContent>
-        </Tabs>
-        
+        <section>
+          <h2 className="text-2xl font-semibold mb-6">{t('paper_summary')}</h2>
+          <PaperSummary
+            title={paperData.title || "Untitled Paper"}
+            summary={processedData.summary}
+            authors={paperData.authors}
+            date={paperData.date}
+          />
+        </section>
         <div className="fixed bottom-6 right-6">
           <Button
             onClick={scrollToTop}

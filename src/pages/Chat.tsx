@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import ChatSidebar from '@/components/chat/ChatSidebar';
@@ -14,10 +13,11 @@ import { ArxivPaper } from '@/lib/types';
 import LoadingState from '@/components/LoadingState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import CodeImplementation from '@/components/CodeImplementation';
 
 const Chat = () => {
   const [isArxivSearchActive, setIsArxivSearchActive] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("content");
+  const [activeTab, setActiveTab] = useState<string>("summary"); // Default to 'summary'
   const [chatMessage, setChatMessage] = useState<string>("");
 
   const {
@@ -128,76 +128,77 @@ const Chat = () => {
                     />
                   </div>
                 ) : (
-                  <Tabs
-                    value={activeTab}
-                    onValueChange={setActiveTab}
-                    className="w-full"
-                  >
-                    <TabsList className="grid w-full grid-cols-3 mb-6">
-                      <TabsTrigger value="content">Contenido</TabsTrigger>
-                      {currentPaperData && <TabsTrigger value="chat">Chat</TabsTrigger>}
-                      <TabsTrigger value="history">Historial</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="content" className="flex-1">
+                  <>
+                    {currentPaperData && currentProcessedData ? (
+                      <Tabs
+                        value={activeTab}
+                        onValueChange={setActiveTab}
+                        className="w-full"
+                      >
+                        <TabsList className="grid w-full grid-cols-3 mb-6">
+                          <TabsTrigger value="summary">Resumen</TabsTrigger>
+                          <TabsTrigger value="implementation">Implementación</TabsTrigger>
+                          <TabsTrigger value="chatbot">Chatbot</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="summary" className="flex-1">
+                          <PaperAnalysis 
+                            paperData={currentPaperData}
+                            processedData={currentProcessedData}
+                            scrollToTop={scrollToTop}
+                          />
+                        </TabsContent>
+
+                        <TabsContent value="implementation" className="flex-1">
+                          <CodeImplementation
+                            codeFiles={currentProcessedData?.projectSuggestions?.[0]?.codeImplementation || []} // Updated to pass an array
+                            language={currentProcessedData?.projectSuggestions?.[0]?.language}
+                          />
+                        </TabsContent>
+
+                        <TabsContent value="chatbot" className="flex-1 flex flex-col h-full">
+                          {currentPaperData && (
+                            <>
+                              <div className="flex-1 overflow-y-auto mb-4 border rounded-lg p-4">
+                                <h3 className="font-medium mb-2">Preguntas sobre {currentPaperData.title}</h3>
+                                <p className="text-muted-foreground text-sm mb-4">
+                                  Haz preguntas específicas sobre este paper o solicita aclaraciones sobre la implementación del código.
+                                </p>
+                                <div className="space-y-4 py-4">
+                                  <div className="bg-muted p-3 rounded-lg">
+                                    <p className="text-sm italic text-muted-foreground">
+                                      No hay mensajes aún. Comienza la conversación haciendo una pregunta.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <form onSubmit={handleChatSubmit} className="flex gap-2">
+                                <Textarea 
+                                  value={chatMessage}
+                                  onChange={(e) => setChatMessage(e.target.value)}
+                                  placeholder="Escribe tu pregunta sobre el paper..."
+                                  className="flex-1"
+                                />
+                                <Button type="submit">
+                                  <MessageSquare className="h-4 w-4 mr-2" />
+                                  Enviar
+                                </Button>
+                              </form>
+                            </>
+                          )}
+                        </TabsContent>
+                      </Tabs>
+                    ) : (
                       <ChatHistory 
                         messages={currentSession.messages}
                         isProcessing={isProcessing}
                         processingStage={processingStage}
-                        messagesEndRef={messagesEndRef}
                         handleFileSelected={handleFileSelected}
+                        messagesEndRef={messagesEndRef}
                         onShowArxivSearch={showArxivSearch}
                       />
-                      
-                      {/* Solo mostramos el PaperAnalysis cuando hay datos de un paper y no está en procesamiento automático */}
-                      {!isAutoProcessing && (currentPaperData && currentProcessedData) && (
-                        <PaperAnalysis 
-                          paperData={currentPaperData}
-                          processedData={currentProcessedData}
-                          scrollToTop={scrollToTop}
-                        />
-                      )}
-                    </TabsContent>
-                    
-                    <TabsContent value="chat" className="flex-1 flex flex-col h-full">
-                      {currentPaperData && (
-                        <>
-                          <div className="flex-1 overflow-y-auto mb-4 border rounded-lg p-4">
-                            <h3 className="font-medium mb-2">Preguntas sobre {currentPaperData.title}</h3>
-                            <p className="text-muted-foreground text-sm mb-4">
-                              Haz preguntas específicas sobre este paper o solicita aclaraciones sobre la implementación del código.
-                            </p>
-                            
-                            <div className="space-y-4 py-4">
-                              {/* Aquí se mostrarían los mensajes del chat */}
-                              <div className="bg-muted p-3 rounded-lg">
-                                <p className="text-sm italic text-muted-foreground">
-                                  No hay mensajes aún. Comienza la conversación haciendo una pregunta.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <form onSubmit={handleChatSubmit} className="flex gap-2">
-                            <Textarea 
-                              value={chatMessage}
-                              onChange={(e) => setChatMessage(e.target.value)}
-                              placeholder="Escribe tu pregunta sobre el paper..."
-                              className="flex-1"
-                            />
-                            <Button type="submit">
-                              <MessageSquare className="h-4 w-4 mr-2" />
-                              Enviar
-                            </Button>
-                          </form>
-                        </>
-                      )}
-                    </TabsContent>
-                    
-                    <TabsContent value="history">
-                      <ProcessedPapersDisplay />
-                    </TabsContent>
-                  </Tabs>
+                    )}
+                  </>
                 )}
               </div>
             )}

@@ -10,7 +10,7 @@ pymongo==4.6.1
 pydantic==2.6.4
 python-dotenv==1.0.0
 tiktoken==0.7.0 # Added for token counting
-google-generativeai==0.5.4 # Added for Google AI Studio
+google-generativeai>=0.8.0 # Updated for Google AI Studio
 
 # Added runtime configuration for Vercel
 vercel

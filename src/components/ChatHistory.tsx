@@ -21,12 +21,14 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   isProcessing,
   user, // Destructured user prop
 }) => {
+  const defaultMessage = "Upload a PDF of an arXiv paper to get started. I'll analyze it and provide a summary and implementation suggestions.";
+
   return (
     <ScrollArea className="h-full p-4">
       {messages.length === 0 && !isLoading && (
         <div className="flex flex-col items-center justify-center h-full">
           <p className="text-muted-foreground mb-4 text-center max-w-lg">
-            Upload a PDF of an arXiv paper to get started. I'll analyze it and provide a summary and implementation suggestions.
+            {defaultMessage}
           </p>
           {showFileUploader && (
             <div className="w-full max-w-md mt-4">
