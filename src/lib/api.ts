@@ -299,6 +299,53 @@ export async function postChatMessage(sessionId: string, message: { role: 'user'
   return response.json();
 }
 
+// Chatbot API
+export async function sendChatbotMessage(
+  sessionId: string,
+  message: string,
+  paperTitle: string,
+  paperSummary: string,
+  codeSuggestions: any[]
+): Promise<{ response: string; credits_remaining: number; tokens_used: any }> {
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${BASE_URL}/api/chatbot/message`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+      paper_title: paperTitle,
+      paper_summary: paperSummary,
+      code_suggestions: codeSuggestions
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    try {
+      const errorData = JSON.parse(errorText);
+      if (errorData.detail && errorData.detail.startsWith('Insufficient credits')) {
+        throw new Error('Insufficient credits');
+      }
+      throw new Error(errorData.detail || 'Failed to send chatbot message');
+    } catch (parseError) {
+      if (errorText.includes('Insufficient credits')) {
+        throw new Error('Insufficient credits');
+      }
+      throw new Error(`Failed to send chatbot message: ${errorText}`);
+    }
+  }
+
+  return await response.json();
+}
+
 export async function deleteChatSession(sessionId: string): Promise<void> {
   const token = localStorage.getItem('auth_token');
   if (!token) {

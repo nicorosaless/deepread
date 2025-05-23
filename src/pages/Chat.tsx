@@ -6,7 +6,7 @@ import PaperAnalysis from '@/components/chat/PaperAnalysis';
 import { useChatSessions } from '@/components/chat/useChatSessions';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Coins, MessageSquare } from 'lucide-react';
+import { Coins, MessageSquare, Send } from 'lucide-react';
 import ProcessedPapersDisplay from '@/components/chat/ProcessedPapersDisplay'; 
 import ArxivSearch from '@/components/arxiv/ArxivSearch';
 import { ArxivPaper } from '@/lib/types';
@@ -14,11 +14,17 @@ import LoadingState from '@/components/LoadingState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import CodeImplementation from '@/components/CodeImplementation';
+import { sendChatbotMessage } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 const Chat = () => {
   const [isArxivSearchActive, setIsArxivSearchActive] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("summary"); // Default to 'summary'
   const [chatMessage, setChatMessage] = useState<string>("");
+  const [chatMessages, setChatMessages] = useState<Array<{id: string, role: 'user' | 'assistant', content: string, timestamp: Date}>>([]);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+
+  const { toast } = useToast();
 
   const {
     isProcessing,
@@ -36,17 +42,26 @@ const Chat = () => {
     handleNewChatWithArxivPaper,
     deleteChatSession,
   } = useChatSessions();
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatMessagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const scrollChatToBottom = () => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [currentSession.messages]);
+
+  useEffect(() => {
+    scrollChatToBottom();
+  }, [chatMessages, isSendingMessage]);
 
   const scrollToTop = () => {
     window.scrollTo({
@@ -74,14 +89,78 @@ const Chat = () => {
     handleNewChatWithArxivPaper(paper);
   };
 
-  const handleChatSubmit = (e: React.FormEvent) => {
+  const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (chatMessage.trim()) {
-      // Aquí implementarías la lógica para enviar el mensaje al chatbot
-      console.log("Mensaje enviado:", chatMessage);
-      setChatMessage("");
+    if (chatMessage.trim() && currentPaperData && currentProcessedData && !isSendingMessage) {
+      setIsSendingMessage(true);
+      
+      try {
+        // Add user message to chat
+        const userMessage = {
+          id: Date.now().toString(),
+          role: 'user' as const,
+          content: chatMessage.trim(),
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, userMessage]);
+        
+        const messageToSend = chatMessage.trim();
+        setChatMessage("");
+        
+        // Send message to chatbot API
+        const response = await sendChatbotMessage(
+          currentSessionId,
+          messageToSend,
+          currentPaperData.title,
+          currentProcessedData.summary,
+          currentProcessedData.projectSuggestions || []
+        );
+        
+        // Add bot response to chat
+        const botMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant' as const,
+          content: response.response,
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+        
+        // Refresh user profile to update credits
+        if (refreshUserProfile) {
+          refreshUserProfile();
+        }
+        
+        toast({
+          title: "Mensaje enviado",
+          description: `Créditos restantes: ${response.credits_remaining}`,
+        });
+        
+      } catch (error: any) {
+        console.error("Error sending message:", error);
+        
+        if (error.message === 'Insufficient credits') {
+          toast({
+            variant: "destructive",
+            title: "Créditos insuficientes",
+            description: "No tienes suficientes créditos para enviar este mensaje.",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Error al enviar el mensaje. Inténtalo de nuevo.",
+          });
+        }
+      } finally {
+        setIsSendingMessage(false);
+      }
     }
   };
+
+  // Reset chat messages when switching sessions or papers
+  useEffect(() => {
+    setChatMessages([]);
+  }, [currentSessionId, currentPaperData]);
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -165,11 +244,49 @@ const Chat = () => {
                                   Haz preguntas específicas sobre este paper o solicita aclaraciones sobre la implementación del código.
                                 </p>
                                 <div className="space-y-4 py-4">
-                                  <div className="bg-muted p-3 rounded-lg">
-                                    <p className="text-sm italic text-muted-foreground">
-                                      No hay mensajes aún. Comienza la conversación haciendo una pregunta.
-                                    </p>
-                                  </div>
+                                  {chatMessages.length === 0 ? (
+                                    <div className="bg-muted p-3 rounded-lg">
+                                      <p className="text-sm italic text-muted-foreground">
+                                        No hay mensajes aún. Comienza la conversación haciendo una pregunta.
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    chatMessages.map((message) => (
+                                      <div
+                                        key={message.id}
+                                        className={`p-3 rounded-lg ${
+                                          message.role === 'user'
+                                            ? 'bg-primary text-primary-foreground ml-8'
+                                            : 'bg-muted mr-8'
+                                        }`}
+                                      >
+                                        <div className="flex justify-between items-start mb-1">
+                                          <span className="font-medium text-sm">
+                                            {message.role === 'user' ? 'Tú' : 'Asistente'}
+                                          </span>
+                                          <span className="text-xs opacity-70">
+                                            {message.timestamp.toLocaleTimeString()}
+                                          </span>
+                                        </div>
+                                        <div className="text-sm whitespace-pre-wrap">
+                                          {message.content}
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                  {isSendingMessage && (
+                                    <div className="bg-muted p-3 rounded-lg mr-8">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="animate-pulse font-medium text-sm">Asistente está escribiendo</div>
+                                        <div className="flex space-x-1">
+                                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div ref={chatMessagesEndRef} />
                                 </div>
                               </div>
                               <form onSubmit={handleChatSubmit} className="flex gap-2">
@@ -178,10 +295,23 @@ const Chat = () => {
                                   onChange={(e) => setChatMessage(e.target.value)}
                                   placeholder="Escribe tu pregunta sobre el paper..."
                                   className="flex-1"
+                                  disabled={isSendingMessage}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault();
+                                      handleChatSubmit(e);
+                                    }
+                                  }}
                                 />
-                                <Button type="submit">
-                                  <MessageSquare className="h-4 w-4 mr-2" />
-                                  Enviar
+                                <Button 
+                                  type="submit" 
+                                  disabled={!chatMessage.trim() || isSendingMessage}
+                                >
+                                  {isSendingMessage ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  ) : (
+                                    <Send className="h-4 w-4" />
+                                  )}
                                 </Button>
                               </form>
                             </>

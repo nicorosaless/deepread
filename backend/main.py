@@ -825,6 +825,216 @@ def log_error_to_db(error_details: dict):
 async def root():
     return {"message": "DeepRead API is running"}
 
+# Chatbot API for paper-specific conversations
+@app.post("/api/chatbot/message")
+async def chatbot_message(
+    request: dict, 
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Handles chatbot conversations about papers using the summary and code suggestions as context.
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection not available")
+    
+    user_id = str(current_user["_id"])
+    user_credits = current_user.get("credits", 0)
+    
+    # Extract request data
+    session_id = request.get("session_id")
+    message = request.get("message", "").strip()
+    paper_title = request.get("paper_title", "")
+    paper_summary = request.get("paper_summary", "")
+    code_suggestions = request.get("code_suggestions", [])
+    
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+    
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Session ID is required")
+    
+    try:
+        # Estimate cost for the chatbot response
+        estimated_input_tokens = count_tokens(message + paper_title + paper_summary + str(code_suggestions))
+        estimated_output_tokens = 300  # Reasonable estimate for chatbot responses
+        estimated_cost = (estimated_input_tokens + estimated_output_tokens) * SUMMARY_COST_PER_TOKEN
+        integer_estimated_cost = math.ceil(estimated_cost)
+        
+        # Check if user has enough credits
+        if user_credits < integer_estimated_cost:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient credits. Required: ~{integer_estimated_cost}, Available: {user_credits}."
+            )
+        
+        # Get AI client
+        ai_info = get_ai_client()
+        ai_client = ai_info["client"]
+        client_type = ai_info["type"]
+        
+        # Create enhanced context for the chatbot
+        code_implementation_context = ""
+        if code_suggestions:
+            code_implementation_context = "\n\nIMPLEMENTACIONES DE CÓDIGO DISPONIBLES:\n"
+            for i, suggestion in enumerate(code_suggestions):
+                if isinstance(suggestion, dict):
+                    title = suggestion.get('title', f'Implementation {i+1}')
+                    description = suggestion.get('description', 'No description available')
+                    language = suggestion.get('language', 'Unknown')
+                    code_files = suggestion.get('codeImplementation', [])
+                    
+                    code_implementation_context += f"\n--- PROYECTO {i+1}: {title} ---\n"
+                    code_implementation_context += f"Lenguaje: {language}\n"
+                    code_implementation_context += f"Descripción: {description}\n"
+                    
+                    # Incluir el código real de todos los archivos
+                    if code_files and isinstance(code_files, list):
+                        code_implementation_context += f"ARCHIVOS DE CÓDIGO:\n"
+                        for j, code_file in enumerate(code_files):
+                            if isinstance(code_file, dict):
+                                filename = code_file.get('filename', f'file_{j+1}')
+                                code_content = code_file.get('code', 'No code available')
+                                code_implementation_context += f"\n** Archivo: {filename} **\n"
+                                # Limitar el código a las primeras 2000 caracteres para evitar prompts muy largos
+                                if len(code_content) > 2000:
+                                    code_implementation_context += f"{code_content[:2000]}...\n[CÓDIGO TRUNCADO - {len(code_content) - 2000} caracteres más]\n"
+                                else:
+                                    code_implementation_context += f"{code_content}\n"
+                    code_implementation_context += "\n" + "="*60 + "\n"
+        
+        # Create the enhanced prompt for the chatbot
+        chatbot_prompt = f"""Eres un asistente experto en papers académicos y programación que ayuda a los usuarios a entender investigaciones científicas y su implementación práctica.
+
+CONTEXTO DEL PAPER:
+Título: {paper_title}
+Resumen: {paper_summary}{code_implementation_context}
+
+INSTRUCCIONES:
+- Responde de forma concisa y clara, usando la información del resumen y código proporcionado
+- Si el usuario pregunta sobre código específico, refiere directamente a los archivos y fragmentos de código disponibles
+- Puedes explicar cómo funciona el código, qué hace cada parte, y cómo se relaciona con el paper
+- Si el usuario pregunta sobre modificaciones o mejoras al código, proporciona sugerencias específicas
+- Usa un tono profesional pero amigable, como un tutor técnico
+- No uses asteriscos, negritas excesivas ni formato markdown complejo
+- Si no tienes información específica sobre algo, reconócelo claramente
+- Mantén respuestas entre 100-300 palabras máximo
+- Para preguntas sobre código, puedes ser más técnico y específico
+- Termina con una pregunta de seguimiento relevante al paper o código
+
+Pregunta del usuario: {message}
+
+Respuesta clara y específica:"""
+        
+        # Count actual input tokens
+        actual_input_tokens = count_tokens(chatbot_prompt)
+        
+        # Get response from AI
+        try:
+            if client_type == "google":
+                if hasattr(app.state, "google_model") and app.state.google_model:
+                    model = app.state.google_model
+                else:
+                    from google.generativeai.generative_models import GenerativeModel
+                    model = GenerativeModel(GOOGLE_MODEL_NAME)
+                
+                try:
+                    response = await model.generate_content_async(chatbot_prompt)
+                    bot_response = response.text
+                except AttributeError:
+                    print("Falling back to synchronous generate_content for chatbot")
+                    response = model.generate_content(chatbot_prompt)
+                    bot_response = response.text
+            else:
+                raise HTTPException(status_code=500, detail="Unsupported AI client type for chatbot.")
+        except Exception as e:
+            print(f"Error during AI chatbot generation ({client_type}): {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Chatbot AI generation failed: {str(e)}")
+        
+        # Calculate actual cost
+        actual_output_tokens = count_tokens(bot_response)
+        actual_cost = (actual_input_tokens + actual_output_tokens) * SUMMARY_COST_PER_TOKEN
+        integer_actual_cost = math.ceil(actual_cost)
+        
+        # Clean the response
+        cleaned_response = bot_response.strip()
+        cleaned_response = re.sub(r'<think>.*?</think>', '', cleaned_response, flags=re.DOTALL).strip()
+        
+        # Save user message to database
+        user_message_record = {
+            "user_id": ObjectId(user_id),
+            "session_id": ObjectId(session_id),
+            "role": "user",
+            "content_type": "chat_message",
+            "content": message,
+            "timestamp": datetime.utcnow(),
+            "paper_context": {
+                "title": paper_title,
+                "summary_preview": paper_summary[:300] + "..." if paper_summary else ""
+            }
+        }
+        db[CHAT_MESSAGES_COLLECTION].insert_one(user_message_record)
+        
+        # Save bot response to database
+        bot_message_record = {
+            "user_id": ObjectId(user_id),
+            "session_id": ObjectId(session_id),
+            "role": "assistant",
+            "content_type": "chat_response",
+            "content": cleaned_response,
+            "input_tokens": actual_input_tokens,
+            "output_tokens": actual_output_tokens,
+            "estimated_cost": integer_actual_cost,
+            "timestamp": datetime.utcnow(),
+            "paper_context": {
+                "title": paper_title,
+                "summary_preview": paper_summary[:300] + "..." if paper_summary else ""
+            }
+        }
+        db[CHAT_MESSAGES_COLLECTION].insert_one(bot_message_record)
+        
+        # Deduct credits
+        if db is not None:
+            db[USERS_COLLECTION].update_one(
+                {"_id": ObjectId(user_id)},
+                {"$inc": {"credits": -integer_actual_cost}}
+            )
+            
+            # Log the credit deduction
+            credit_log_entry = {
+                "user_id": ObjectId(user_id),
+                "session_id": ObjectId(session_id),
+                "type": "deduction",
+                "amount": integer_actual_cost,
+                "reason": "Chatbot conversation",
+                "timestamp": datetime.utcnow(),
+                "details": {
+                    "chatbot_cost": integer_actual_cost,
+                    "paper_title": paper_title,
+                    "message_length": len(message)
+                }
+            }
+            db[CREDIT_LOGS_COLLECTION].insert_one(credit_log_entry)
+        
+        return {
+            "response": cleaned_response,
+            "credits_remaining": user_credits - integer_actual_cost,
+            "tokens_used": {
+                "input": actual_input_tokens,
+                "output": actual_output_tokens,
+                "total": actual_input_tokens + actual_output_tokens
+            }
+        }
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        print(f"Error in chatbot endpoint: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Chatbot error: {str(e)}")
+
 # Endpoints para la gestión de chats
 @app.post("/api/chat/sessions", response_model=ChatSessionResponse)
 async def save_chat_session(request: SaveChatSessionRequest, current_user: dict = Depends(get_current_user)):
@@ -1279,5 +1489,4 @@ async def health_check():
 
 if __name__  == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
 
